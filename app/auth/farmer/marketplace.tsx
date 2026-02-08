@@ -20,6 +20,7 @@ type TabType = "demands" | "listings";
 type BuyerDemand = {
   _id?: string;
   CropId?: string;
+  buyerId?: string; // ✅ REQUIRED
   market?: any;
   Market?: string;
   ExpectedPrice?: { Value?: number };
@@ -30,7 +31,6 @@ type BuyerDemand = {
 type FarmerListing = {
   _id?: string;
   crop?: { name?: string };
-  market?: any;
   location?: { village?: string; city?: string };
   price?: number;
   quantity?: number;
@@ -48,34 +48,32 @@ export default function FarmerMarketplace() {
 
   const [cropMap, setCropMap] = useState<Record<string, string>>({});
   const [viewDemand, setViewDemand] = useState<BuyerDemand | null>(null);
-  const [viewListing, setViewListing] = useState<FarmerListing | null>(null);
+
+  const [connectRequested, setConnectRequested] = useState(false);
 
   /* ---------- AUTH ---------- */
-
-  const getAuthHeaders = async () => {
+  const getHeaders = async () => {
     const token = await AsyncStorage.getItem("token");
     return { Authorization: `Bearer ${token}` };
   };
 
   /* ---------- LOAD CROPS ---------- */
-
   const loadCrops = async () => {
-    const headers = await getAuthHeaders();
+    const headers = await getHeaders();
     const res = await axios.get(`${BASE_URL}/getAllCrop`, { headers });
 
     const map: Record<string, string> = {};
-    (res.data || []).forEach((c: any) => {
+    res.data.forEach((c: any) => {
       map[c._id || c.id] = c.name;
     });
     setCropMap(map);
   };
 
   /* ---------- FETCH DATA ---------- */
-
   const fetchBuyerDemands = async () => {
     try {
       setLoading(true);
-      const headers = await getAuthHeaders();
+      const headers = await getHeaders();
       const res = await axios.get(`${BASE_URL}/marketplace/buyer/all`, {
         headers,
       });
@@ -88,7 +86,7 @@ export default function FarmerMarketplace() {
   const fetchMyListings = async () => {
     try {
       setLoading(true);
-      const headers = await getAuthHeaders();
+      const headers = await getHeaders();
       const res = await axios.get(
         `${BASE_URL}/marketplace/farmer/getAllListing`,
         { headers },
@@ -99,8 +97,36 @@ export default function FarmerMarketplace() {
     }
   };
 
-  /* ---------- INIT ---------- */
+  /* ---------- CONNECT TO BUYER ---------- */
+  const connectToBuyer = async () => {
+    if (!viewDemand?._id || !viewDemand.buyerId) return;
 
+    try {
+      const token = await AsyncStorage.getItem("token");
+      const farmerId = await AsyncStorage.getItem("farmerId");
+
+      await axios.post(
+        `${BASE_URL}/connections/send`,
+        {
+          senderId: farmerId,
+          senderRole: "FARMER",
+          receiverId: viewDemand.buyerId, // ✅ FIXED
+          receiverRole: "BUYER",
+          referenceType: "BUYER_DEMAND",
+          referenceId: viewDemand._id,
+        },
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
+
+      setConnectRequested(true);
+    } catch (err) {
+      console.log("Connect error", err);
+    }
+  };
+
+  /* ---------- INIT ---------- */
   useEffect(() => {
     loadCrops();
   }, []);
@@ -109,8 +135,7 @@ export default function FarmerMarketplace() {
     activeTab === "demands" ? fetchBuyerDemands() : fetchMyListings();
   }, [activeTab]);
 
-  /* ---------- BUYER DEMAND CARD ---------- */
-
+  /* ---------- RENDER DEMAND ---------- */
   const renderDemand = ({ item }: { item: BuyerDemand }) => {
     const cropName = cropMap[item.CropId || ""] || "Unknown Crop";
     const marketName =
@@ -134,7 +159,10 @@ export default function FarmerMarketplace() {
         <View style={styles.cardFooter}>
           <TouchableOpacity
             style={styles.viewBtn}
-            onPress={() => setViewDemand(item)}
+            onPress={() => {
+              setConnectRequested(false);
+              setViewDemand(item);
+            }}
           >
             <Text style={styles.viewText}>View</Text>
           </TouchableOpacity>
@@ -143,37 +171,21 @@ export default function FarmerMarketplace() {
     );
   };
 
-  /* ---------- MY LISTING CARD ---------- */
+  /* ---------- RENDER LISTING ---------- */
+  const renderListing = ({ item }: { item: FarmerListing }) => (
+    <View style={styles.card}>
+      <Text style={styles.crop}>{item.crop?.name || "Unknown Crop"}</Text>
 
-  const renderListing = ({ item }: { item: FarmerListing }) => {
-    const location = [item.location?.village, item.location?.city]
-      .filter(Boolean)
-      .join(", ");
-
-    return (
-      <View style={styles.card}>
-        <Text style={styles.crop}>{item.crop?.name || "Unknown Crop"}</Text>
-
-        <View style={styles.row}>
-          <Text style={styles.price}>₹{item.price ?? "-"}</Text>
-          <Text style={styles.qty}>
-            {item.quantity ?? "-"} {item.unit ?? ""}
-          </Text>
-        </View>
-
-        <Text style={styles.status}>Status: {item.status || "active"}</Text>
-
-        <View style={styles.cardFooter}>
-          <TouchableOpacity
-            style={styles.viewBtn}
-            onPress={() => setViewListing(item)}
-          >
-            <Text style={styles.viewText}>View</Text>
-          </TouchableOpacity>
-        </View>
+      <View style={styles.row}>
+        <Text style={styles.price}>₹{item.price ?? "-"}</Text>
+        <Text style={styles.qty}>
+          {item.quantity ?? "-"} {item.unit ?? ""}
+        </Text>
       </View>
-    );
-  };
+
+      <Text style={styles.status}>Status: {item.status || "active"}</Text>
+    </View>
+  );
 
   return (
     <SafeAreaView style={styles.container}>
@@ -199,6 +211,7 @@ export default function FarmerMarketplace() {
         ))}
       </View>
 
+      {/* ADD CROP BUTTON (UNCHANGED) */}
       {activeTab === "listings" && (
         <TouchableOpacity
           style={styles.primaryBtn}
@@ -215,11 +228,10 @@ export default function FarmerMarketplace() {
           data={activeTab === "demands" ? demands : listings}
           renderItem={activeTab === "demands" ? renderDemand : renderListing}
           keyExtractor={(item, index) => item._id || index.toString()}
-          contentContainerStyle={{ paddingBottom: 120 }}
         />
       )}
 
-      {/* ---------- BUYER DEMAND VIEW ---------- */}
+      {/* MODAL */}
       {viewDemand && (
         <Modal transparent animationType="slide">
           <View style={styles.modalBg}>
@@ -238,6 +250,24 @@ export default function FarmerMarketplace() {
               </Text>
               <Text>Status: {viewDemand.status || "active"}</Text>
 
+              <TouchableOpacity
+                style={[
+                  styles.connectBtn,
+                  connectRequested && styles.connectBtnDisabled,
+                ]}
+                disabled={connectRequested}
+                onPress={connectToBuyer}
+              >
+                <Text
+                  style={[
+                    styles.connectText,
+                    connectRequested && styles.connectTextDisabled,
+                  ]}
+                >
+                  {connectRequested ? "Requested" : "Connect to Buyer"}
+                </Text>
+              </TouchableOpacity>
+
               <TouchableOpacity style={styles.contactBtn}>
                 <Text style={styles.contactText}>Contact Buyer</Text>
               </TouchableOpacity>
@@ -252,38 +282,11 @@ export default function FarmerMarketplace() {
           </View>
         </Modal>
       )}
-
-      {/* ---------- MY LISTING VIEW ---------- */}
-      {viewListing && (
-        <Modal transparent animationType="slide">
-          <View style={styles.modalBg}>
-            <View style={styles.modalCard}>
-              <Text style={styles.modalTitle}>
-                {viewListing.crop?.name || "Crop"}
-              </Text>
-
-              <Text>Price: ₹{viewListing.price ?? "-"}</Text>
-              <Text>
-                Quantity: {viewListing.quantity ?? "-"} {viewListing.unit ?? ""}
-              </Text>
-              <Text>Status: {viewListing.status || "active"}</Text>
-
-              <TouchableOpacity
-                style={styles.closeBtn}
-                onPress={() => setViewListing(null)}
-              >
-                <Text style={styles.closeText}>Close</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </Modal>
-      )}
     </SafeAreaView>
   );
 }
 
-/* ---------- STYLES ---------- */
-
+/* ---------- STYLES (UNCHANGED) ---------- */
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F9FAFB", padding: 16 },
   title: {
@@ -292,13 +295,11 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginBottom: 16,
   },
-
   tabRow: {
     flexDirection: "row",
     backgroundColor: "#fff",
     borderRadius: 10,
     padding: 6,
-    marginBottom: 12,
   },
   tabButton: {
     flex: 1,
@@ -315,7 +316,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 10,
     alignItems: "center",
-    marginBottom: 12,
+    marginVertical: 12,
   },
   primaryBtnText: { color: "#fff", fontSize: 15, fontWeight: "700" },
 
@@ -325,42 +326,32 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 12,
   },
+  crop: { fontSize: 16, fontWeight: "700" },
+  market: { color: "#6B7280" },
+  row: { flexDirection: "row", justifyContent: "space-between" },
+  price: { color: "#2E7D32", fontWeight: "700" },
+  qty: { fontWeight: "600" },
+  status: { fontSize: 12 },
 
-  cardFooter: {
-    marginTop: 8,
-    alignItems: "flex-start",
-  },
-
+  cardFooter: { marginTop: 8 },
   viewBtn: {
     borderWidth: 1,
     borderColor: "#2E7D32",
     borderRadius: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    alignSelf: "flex-start",
   },
   viewText: { fontSize: 12, fontWeight: "700", color: "#2E7D32" },
-
-  crop: { fontSize: 16, fontWeight: "700" },
-  market: { color: "#6B7280", marginBottom: 8 },
-
-  row: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 6,
-  },
-  price: { color: "#2E7D32", fontWeight: "700" },
-  qty: { fontWeight: "600" },
-  status: { fontSize: 12, color: "#374151" },
 
   modalBg: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.4)",
     justifyContent: "center",
-    alignItems: "center",
   },
   modalCard: {
     backgroundColor: "#fff",
-    width: "90%",
+    margin: 20,
     borderRadius: 12,
     padding: 20,
   },
@@ -371,9 +362,21 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 10,
     alignItems: "center",
-    marginTop: 16,
+    marginTop: 12,
   },
   contactText: { color: "#fff", fontWeight: "700" },
+
+  connectBtn: {
+    borderWidth: 1,
+    borderColor: "#2E7D32",
+    borderRadius: 10,
+    paddingVertical: 10,
+    alignItems: "center",
+    marginTop: 16,
+  },
+  connectText: { color: "#2E7D32", fontWeight: "700" },
+  connectBtnDisabled: { borderColor: "#9CA3AF" },
+  connectTextDisabled: { color: "#9CA3AF" },
 
   closeBtn: { marginTop: 12, alignItems: "center" },
   closeText: { fontWeight: "700", color: "#2E7D32" },
