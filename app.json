@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "my-app",
-    "slug": "my-app",
+    "name": "Mandi Connect",
+    "slug": "mandi",
     "version": "1.0.0",
     "scheme": "mandiconnect",
     "orientation": "portrait",
@@ -11,6 +11,12 @@
       "android",
       "web"
     ],
+    "icon": "./assets/images/banner.jpg",
+    "splash": {
+      "image": "./assets/images/background.jpg",
+      "resizeMode": "cover",
+      "backgroundColor": "#10B981"
+    },
     "updates": {
       "enabled": true
     },
@@ -19,15 +25,32 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "1cc7ff86-1478-42f9-bbdf-e6f6037941c4"
-      }
+        "projectId": "e748ff2d-a564-4912-8cb6-a37c0ec6ab90"
+      },
+      "router": {}
     },
     "android": {
-      "package": "com.dhanashrii123.myapp"
+      "package": "com.mandiconnect.app",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/banner.jpg",
+        "backgroundColor": "#10B981"
+      },
+      "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE"
+      ]
     },
     "plugins": [
       "expo-font",
       "expo-router"
-    ]
+    ],
+    "owner": "yashsdsdsdsds-organization",
+    "ios": {
+      "bundleIdentifier": "com.mandiconnect.app",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    }
   }
 }

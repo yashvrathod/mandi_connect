@@ -1,12 +1,8 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import {
-  FlatList,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { StatusBar } from "expo-status-bar";
+import { FlatList, Text, TouchableOpacity, View } from "react-native";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { AnimatedIn, ModernCard, PillBadge } from "../../ui/components";
 
 type NotificationType = "BUYER_DEMAND" | "FEEDBACK" | "PRICE_UPDATE";
 
@@ -47,7 +43,15 @@ const notifications: NotificationItem[] = [
 ];
 
 export default function FarmerNotifications() {
-  const renderItem = ({ item }: { item: NotificationItem }) => {
+  const insets = useSafeAreaInsets();
+
+  const renderItem = ({
+    item,
+    index,
+  }: {
+    item: NotificationItem;
+    index: number;
+  }) => {
     const icon =
       item.type === "BUYER_DEMAND"
         ? "account-search"
@@ -55,114 +59,90 @@ export default function FarmerNotifications() {
           ? "thumb-up-outline"
           : "chart-line";
 
+    const typeLabel =
+      item.type === "BUYER_DEMAND"
+        ? "Buyer Demand"
+        : item.type === "FEEDBACK"
+          ? "Feedback"
+          : "Price Alert";
+
+    const variant =
+      item.type === "BUYER_DEMAND"
+        ? "info"
+        : item.type === "FEEDBACK"
+          ? "success"
+          : "warning";
+
     return (
-      <TouchableOpacity
-        activeOpacity={0.7}
-        style={[styles.card, !item.isRead && styles.unreadCard]}
-      >
-        <View style={styles.iconWrap}>
-          <MaterialCommunityIcons
-            name={icon}
-            size={24}
-            color={item.isRead ? "#6B7280" : "#2E7D32"}
-          />
-        </View>
+      <AnimatedIn delay={Math.min(index * 40, 240)} className="px-5 pt-4">
+        <TouchableOpacity activeOpacity={0.85}>
+          <ModernCard className="p-5">
+            <View className="flex-row items-start gap-4">
+              <View
+                className={
+                  "h-14 w-14 rounded-2xl items-center justify-center " +
+                  (item.isRead ? "bg-zinc-100" : "bg-farmer-100")
+                }
+              >
+                <MaterialCommunityIcons
+                  name={icon as any}
+                  size={26}
+                  color={item.isRead ? "#71717A" : "#059669"}
+                />
+              </View>
 
-        <View style={styles.textWrap}>
-          <Text style={[styles.message, !item.isRead && styles.unreadText]}>
-            {item.message}
-          </Text>
-          <Text style={styles.time}>{item.time}</Text>
-        </View>
+              <View className="flex-1">
+                <View className="mb-2 flex-row items-center justify-between">
+                  <PillBadge label={typeLabel} variant={variant as any} />
+                  {!item.isRead ? (
+                    <View className="h-3 w-3 rounded-full bg-farmer-600" />
+                  ) : null}
+                </View>
 
-        {!item.isRead && <View style={styles.dot} />}
-      </TouchableOpacity>
+                <Text
+                  className={
+                    item.isRead
+                      ? "text-zinc-700"
+                      : "text-zinc-900 font-bold text-base"
+                  }
+                >
+                  {item.message}
+                </Text>
+
+                <View className="flex-row items-center gap-1.5 mt-2.5">
+                  <MaterialCommunityIcons
+                    name="clock-outline"
+                    size={14}
+                    color="#A1A1AA"
+                  />
+                  <Text className="text-zinc-400 text-sm">{item.time}</Text>
+                </View>
+              </View>
+            </View>
+          </ModernCard>
+        </TouchableOpacity>
+      </AnimatedIn>
     );
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      {/* HEADER */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>🔔 Notifications</Text>
+    <SafeAreaView className="flex-1 bg-gray-50">
+      <StatusBar style="dark" />
+
+      <View className="px-5 pt-5 pb-4 bg-white border-b border-gray-100">
+        <Text className="text-zinc-900 text-3xl font-extrabold mb-2">
+          Notifications
+        </Text>
+        <Text className="text-zinc-500">Updates from buyers and market</Text>
       </View>
 
-      {/* LIST */}
       <FlatList
         data={notifications}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
-        contentContainerStyle={{ paddingBottom: 40 }}
         showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: insets.bottom + 28 }}
       />
     </SafeAreaView>
   );
 }
-
-/* ---------- STYLES ---------- */
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#F9FAFB",
-  },
-
-  header: {
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#E5E7EB",
-    backgroundColor: "#fff",
-  },
-
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: "800",
-    color: "#111827",
-  },
-
-  card: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 14,
-    marginHorizontal: 12,
-    marginTop: 12,
-    borderRadius: 14,
-    backgroundColor: "#fff",
-  },
-
-  unreadCard: {
-    borderLeftWidth: 4,
-    borderLeftColor: "#2E7D32",
-  },
-
-  iconWrap: {
-    marginRight: 12,
-  },
-
-  textWrap: {
-    flex: 1,
-  },
-
-  message: {
-    fontSize: 14,
-    color: "#374151",
-  },
-
-  unreadText: {
-    fontWeight: "700",
-    color: "#111827",
-  },
-
-  time: {
-    marginTop: 4,
-    fontSize: 12,
-    color: "#6B7280",
-  },
-
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: "#2E7D32",
-  },
-});

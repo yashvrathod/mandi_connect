@@ -1,16 +1,8 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
-import {
-  FlatList,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from "react-native";
-import {
-  SafeAreaView,
-  useSafeAreaInsets,
-} from "react-native-safe-area-context";
+import { FlatList, Text, TouchableOpacity, View } from "react-native";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { AnimatedIn, AppHeader, ModernCard, PillBadge } from "../../ui/components";
 
 /* ---------- TYPES ---------- */
 type NotificationItem = {
@@ -51,134 +43,105 @@ const notifications: NotificationItem[] = [
 export default function BuyerNotifications() {
   const insets = useSafeAreaInsets();
 
-  const renderItem = ({ item }: { item: NotificationItem }) => {
+  const renderItem = ({
+    item,
+    index,
+  }: {
+    item: NotificationItem;
+    index: number;
+  }) => {
     const icon =
       item.type === "FARMER_LISTING"
-        ? "leaf"
+        ? "sprout"
         : item.type === "INTEREST_ACCEPTED"
           ? "check-circle-outline"
           : "chart-line";
+    
+    const typeLabel =
+      item.type === "FARMER_LISTING"
+        ? "New Listing"
+        : item.type === "INTEREST_ACCEPTED"
+          ? "Accepted"
+          : "Price Alert";
+    
+    const typeBadgeVariant =
+      item.type === "FARMER_LISTING"
+        ? "success"
+        : item.type === "INTEREST_ACCEPTED"
+          ? "info"
+          : "warning";
 
     return (
-      <TouchableOpacity
-        style={[styles.card, !item.isRead && styles.unreadCard]}
-      >
-        <View style={styles.iconWrap}>
-          <MaterialCommunityIcons
-            name={icon}
-            size={24}
-            color={item.isRead ? "#6B7280" : "#2E7D32"}
-          />
-        </View>
+      <AnimatedIn delay={Math.min(index * 40, 240)} className="px-5 pt-4">
+        <TouchableOpacity activeOpacity={0.85}>
+          <ModernCard className="p-5">
+            <View className="flex-row items-start gap-4">
+              {/* Icon */}
+              <View
+                className={
+                  "h-14 w-14 rounded-2xl items-center justify-center " +
+                  (item.isRead
+                    ? "bg-zinc-100"
+                    : "bg-brand-100")
+                }
+              >
+                <MaterialCommunityIcons
+                  name={icon as any}
+                  size={26}
+                  color={item.isRead ? "#71717A" : "#059669"}
+                />
+              </View>
 
-        <View style={styles.textWrap}>
-          <Text style={[styles.message, !item.isRead && styles.unreadText]}>
-            {item.message}
-          </Text>
+              <View className="flex-1">
+                {/* Type Badge */}
+                <View className="mb-2">
+                  <PillBadge label={typeLabel} variant={typeBadgeVariant} />
+                </View>
 
-          {item.subText ? (
-            <Text style={styles.subText}>{item.subText}</Text>
-          ) : null}
+                {/* Message */}
+                <Text className={item.isRead ? "text-zinc-700" : "text-zinc-900 font-bold text-base"}>
+                  {item.message}
+                </Text>
+                
+                {/* Subtext */}
+                {item.subText ? (
+                  <Text className="text-zinc-500 text-sm mt-1.5">{item.subText}</Text>
+                ) : null}
 
-          <Text style={styles.time}>{item.time}</Text>
-        </View>
+                {/* Time */}
+                <View className="flex-row items-center gap-1.5 mt-2.5">
+                  <MaterialCommunityIcons name="clock-outline" size={14} color="#A1A1AA" />
+                  <Text className="text-zinc-400 text-sm">{item.time}</Text>
+                </View>
+              </View>
 
-        {!item.isRead && <View style={styles.dot} />}
-      </TouchableOpacity>
+              {/* Unread Indicator */}
+              {!item.isRead ? (
+                <View className="h-3 w-3 rounded-full bg-brand-600 mt-1" />
+              ) : null}
+            </View>
+          </ModernCard>
+        </TouchableOpacity>
+      </AnimatedIn>
     );
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView className="flex-1 bg-gray-50">
       <StatusBar style="dark" />
 
-      {/* HEADER */}
-      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
-        <Text style={styles.headerTitle}>🔔 Notifications</Text>
+      <View className="px-5 pt-5 pb-4 bg-white border-b border-gray-100">
+        <Text className="text-zinc-900 text-3xl font-extrabold mb-2">Notifications</Text>
+        <Text className="text-zinc-500">Stay updated with latest alerts</Text>
       </View>
 
-      {/* LIST */}
       <FlatList
         data={notifications}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
-        contentContainerStyle={{ paddingBottom: insets.bottom + 40 }}
+        contentContainerStyle={{ paddingBottom: insets.bottom + 28 }}
         showsVerticalScrollIndicator={false}
       />
     </SafeAreaView>
   );
 }
-
-/* ---------- STYLES ---------- */
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#F9FAFB",
-  },
-
-  header: {
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#E5E7EB",
-    backgroundColor: "#fff",
-  },
-
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: "800",
-    color: "#111827",
-  },
-
-  card: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 14,
-    marginHorizontal: 12,
-    marginTop: 12,
-    borderRadius: 14,
-    backgroundColor: "#fff",
-  },
-
-  unreadCard: {
-    borderLeftWidth: 4,
-    borderLeftColor: "#2E7D32",
-  },
-
-  iconWrap: {
-    marginRight: 12,
-  },
-
-  textWrap: {
-    flex: 1,
-  },
-
-  message: {
-    fontSize: 14,
-    color: "#374151",
-  },
-
-  unreadText: {
-    fontWeight: "700",
-    color: "#111827",
-  },
-
-  subText: {
-    marginTop: 2,
-    fontSize: 13,
-    color: "#6B7280",
-  },
-
-  time: {
-    marginTop: 4,
-    fontSize: 12,
-    color: "#6B7280",
-  },
-
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: "#2E7D32",
-  },
-});

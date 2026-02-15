@@ -1,26 +1,30 @@
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
 import { useRouter } from "expo-router";
-import { useEffect, useState } from "react";
+import { StatusBar } from "expo-status-bar";
+import { useEffect, useMemo, useState } from "react";
+import { FlatList, Image, Modal, Text, TouchableOpacity, View } from "react-native";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import {
-  ActivityIndicator,
-  FlatList,
-  Modal,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+  AnimatedIn,
+  EmptyState,
+  LoadingState,
+  ModernCard,
+  PillBadge,
+  SegmentedTabs,
+} from "../../ui/components";
 
 const BASE_URL = "https://mandiconnect.onrender.com";
+const FALLBACK_IMAGE =
+  "https://images.unsplash.com/photo-1567306226416-28f0efdc88ce";
 
 type TabType = "demands" | "listings";
 
 type BuyerDemand = {
   _id?: string;
   CropId?: string;
-  buyerId?: string; // ✅ REQUIRED
+  buyerId?: string;
   market?: any;
   Market?: string;
   ExpectedPrice?: { Value?: number };
@@ -31,6 +35,7 @@ type BuyerDemand = {
 type FarmerListing = {
   _id?: string;
   crop?: { name?: string };
+  photoUrl?: string;
   location?: { village?: string; city?: string };
   price?: number;
   quantity?: number;
@@ -38,17 +43,31 @@ type FarmerListing = {
   status?: string;
 };
 
+type DemandViewModel = {
+  id: string;
+  cropName: string;
+  marketName: string;
+  expectedPrice: number;
+  quantityValue: number;
+  quantityUnit: string;
+  status: string;
+  buyerId?: string;
+  raw: BuyerDemand;
+};
+
 export default function FarmerMarketplace() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
 
   const [activeTab, setActiveTab] = useState<TabType>("demands");
   const [demands, setDemands] = useState<BuyerDemand[]>([]);
   const [listings, setListings] = useState<FarmerListing[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
   const [cropMap, setCropMap] = useState<Record<string, string>>({});
-  const [viewDemand, setViewDemand] = useState<BuyerDemand | null>(null);
 
+  const [viewDemand, setViewDemand] = useState<DemandViewModel | null>(null);
   const [connectRequested, setConnectRequested] = useState(false);
 
   /* ---------- AUTH ---------- */
@@ -74,12 +93,11 @@ export default function FarmerMarketplace() {
     try {
       setLoading(true);
       const headers = await getHeaders();
-      const res = await axios.get(`${BASE_URL}/marketplace/buyer/all`, {
-        headers,
-      });
-      setDemands(res.data || []);
+      const res = await axios.get(`${BASE_URL}/marketplace/buyer/all`, { headers });
+      setDemands(Array.isArray(res.data) ? res.data : []);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
@@ -87,19 +105,19 @@ export default function FarmerMarketplace() {
     try {
       setLoading(true);
       const headers = await getHeaders();
-      const res = await axios.get(
-        `${BASE_URL}/marketplace/farmer/getAllListing`,
-        { headers },
-      );
-      setListings(res.data || []);
+      const res = await axios.get(`${BASE_URL}/marketplace/farmer/getAllListing`, {
+        headers,
+      });
+      setListings(Array.isArray(res.data) ? res.data : []);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
   /* ---------- CONNECT TO BUYER ---------- */
   const connectToBuyer = async () => {
-    if (!viewDemand?._id || !viewDemand.buyerId) return;
+    if (!viewDemand?.id || !viewDemand.buyerId) return;
 
     try {
       const token = await AsyncStorage.getItem("token");
@@ -110,10 +128,10 @@ export default function FarmerMarketplace() {
         {
           senderId: farmerId,
           senderRole: "FARMER",
-          receiverId: viewDemand.buyerId, // ✅ FIXED
+          receiverId: viewDemand.buyerId,
           receiverRole: "BUYER",
           referenceType: "BUYER_DEMAND",
-          referenceId: viewDemand._id,
+          referenceId: viewDemand.id,
         },
         {
           headers: { Authorization: `Bearer ${token}` },
@@ -132,252 +150,319 @@ export default function FarmerMarketplace() {
   }, []);
 
   useEffect(() => {
-    activeTab === "demands" ? fetchBuyerDemands() : fetchMyListings();
+    setLoading(true);
+    if (activeTab === "demands") {
+      fetchBuyerDemands();
+    } else {
+      fetchMyListings();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
 
-  /* ---------- RENDER DEMAND ---------- */
-  const renderDemand = ({ item }: { item: BuyerDemand }) => {
-    const cropName = cropMap[item.CropId || ""] || "Unknown Crop";
-    const marketName =
-      item.market?.marketName || item.market?.name || item.Market || "-";
-
-    return (
-      <View style={styles.card}>
-        <Text style={styles.crop}>{cropName}</Text>
-        <Text style={styles.market}>Market: {marketName}</Text>
-
-        <View style={styles.row}>
-          <Text style={styles.price}>₹{item.ExpectedPrice?.Value ?? "-"}</Text>
-          <Text style={styles.qty}>
-            {item.RequiredQuantity?.Value ?? "-"}{" "}
-            {item.RequiredQuantity?.Unit ?? ""}
-          </Text>
-        </View>
-
-        <Text style={styles.status}>Status: {item.status || "active"}</Text>
-
-        <View style={styles.cardFooter}>
-          <TouchableOpacity
-            style={styles.viewBtn}
-            onPress={() => {
-              setConnectRequested(false);
-              setViewDemand(item);
-            }}
-          >
-            <Text style={styles.viewText}>View</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
+  const onRefresh = async () => {
+    setRefreshing(true);
+    if (activeTab === "demands") {
+      await fetchBuyerDemands();
+    } else {
+      await fetchMyListings();
+    }
   };
 
-  /* ---------- RENDER LISTING ---------- */
-  const renderListing = ({ item }: { item: FarmerListing }) => (
-    <View style={styles.card}>
-      <Text style={styles.crop}>{item.crop?.name || "Unknown Crop"}</Text>
-
-      <View style={styles.row}>
-        <Text style={styles.price}>₹{item.price ?? "-"}</Text>
-        <Text style={styles.qty}>
-          {item.quantity ?? "-"} {item.unit ?? ""}
-        </Text>
-      </View>
-
-      <Text style={styles.status}>Status: {item.status || "active"}</Text>
-    </View>
-  );
+  const demandsVm = useMemo((): DemandViewModel[] => {
+    return demands.map((d, i) => {
+      const cropName = cropMap[d.CropId || ""] || "Unknown Crop";
+      const marketName = d.market?.marketName || d.market?.name || d.Market || "—";
+      return {
+        id: d._id || String(i),
+        cropName,
+        marketName,
+        expectedPrice: d.ExpectedPrice?.Value ?? 0,
+        quantityValue: d.RequiredQuantity?.Value ?? 0,
+        quantityUnit: d.RequiredQuantity?.Unit ?? "",
+        status: d.status || "active",
+        buyerId: d.buyerId,
+        raw: d,
+      };
+    });
+  }, [demands, cropMap]);
 
   return (
-    <SafeAreaView style={styles.container}>
-      <Text style={styles.title}>🌾 Farmer Marketplace</Text>
+    <SafeAreaView className="flex-1 bg-gray-50">
+      <StatusBar style="dark" />
 
-      {/* TABS */}
-      <View style={styles.tabRow}>
-        {(["demands", "listings"] as TabType[]).map((tab) => (
-          <TouchableOpacity
-            key={tab}
-            style={[styles.tabButton, activeTab === tab && styles.activeTab]}
-            onPress={() => setActiveTab(tab)}
-          >
-            <Text
-              style={[
-                styles.tabText,
-                activeTab === tab && styles.activeTabText,
-              ]}
-            >
-              {tab === "demands" ? "Buyer Demands" : "My Listings"}
-            </Text>
-          </TouchableOpacity>
-        ))}
+      <View className="px-5 pt-5 pb-4 bg-white border-b border-gray-100">
+        <Text className="text-zinc-900 text-3xl font-extrabold mb-2">Marketplace</Text>
+        <Text className="text-zinc-500">Buyer demands and your crop listings</Text>
       </View>
 
-      {/* ADD CROP BUTTON (UNCHANGED) */}
-      {activeTab === "listings" && (
-        <TouchableOpacity
-          style={styles.primaryBtn}
-          onPress={() => router.push("/auth/farmer/add-crop")}
-        >
-          <Text style={styles.primaryBtnText}>+ List Crop for Sale</Text>
-        </TouchableOpacity>
-      )}
+      <View className="px-5 py-4 bg-white">
+        <SegmentedTabs
+          accent="farmer"
+          tabs={[
+            { key: "demands", label: "Buyer Demands" },
+            { key: "listings", label: "My Listings" },
+          ]}
+          value={activeTab}
+          onChange={(k) => setActiveTab(k as TabType)}
+        />
+      </View>
+
+      {activeTab === "listings" ? (
+        <View className="px-5 pb-4 bg-white border-b border-gray-100">
+          <TouchableOpacity
+            activeOpacity={0.9}
+            onPress={() => router.push("/auth/farmer/add-crop")}
+            className="bg-farmer-600 rounded-2xl py-4 items-center shadow-sm"
+          >
+            <Text className="text-white font-extrabold text-base">+ List Crop for Sale</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
 
       {loading ? (
-        <ActivityIndicator size="large" color="#2E7D32" />
+        <LoadingState label="Loading marketplace…" />
       ) : (
         <FlatList
-          data={activeTab === "demands" ? demands : listings}
-          renderItem={activeTab === "demands" ? renderDemand : renderListing}
-          keyExtractor={(item, index) => item._id || index.toString()}
+          data={activeTab === "demands" ? demandsVm : listings}
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          keyExtractor={(item: any, index) => item.id || item._id || String(index)}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: insets.bottom + 28 }}
+          ListEmptyComponent={
+            <EmptyState
+              title={activeTab === "demands" ? "No buyer demands" : "No listings yet"}
+              subtitle={
+                activeTab === "demands"
+                  ? "Check back later for new demands from buyers."
+                  : "Tap ‘List Crop for Sale’ to create your first listing."
+              }
+            />
+          }
+          renderItem={({ item, index }) => {
+            if (activeTab === "demands") {
+              const d = item as DemandViewModel;
+              const variant =
+                String(d.status).toLowerCase() === "active"
+                  ? "success"
+                  : String(d.status).toLowerCase() === "fulfilled"
+                    ? "info"
+                    : "default";
+
+              return (
+                <AnimatedIn delay={Math.min(index * 35, 260)} className="px-5 pt-4">
+                  <TouchableOpacity
+                    activeOpacity={0.95}
+                    onPress={() => {
+                      setConnectRequested(false);
+                      setViewDemand(d);
+                    }}
+                  >
+                    <ModernCard className="p-5">
+                      <View className="flex-row items-center justify-between mb-4">
+                        <View className="flex-row items-center gap-3 flex-1">
+                          <View className="h-12 w-12 rounded-xl bg-farmer-100 items-center justify-center">
+                            <MaterialCommunityIcons
+                              name="account-search"
+                              size={24}
+                              color="#EA580C"
+                            />
+                          </View>
+                          <View className="flex-1">
+                            <Text className="text-zinc-900 font-bold text-xl">
+                              {d.cropName}
+                            </Text>
+                            <Text className="text-zinc-500 text-sm mt-0.5">
+                              {d.marketName}
+                            </Text>
+                          </View>
+                        </View>
+
+                        <PillBadge
+                          label={d.status.charAt(0).toUpperCase() + d.status.slice(1)}
+                          variant={variant as any}
+                        />
+                      </View>
+
+                      <View className="flex-row gap-4">
+                        <View className="flex-1 bg-farmer-50 rounded-2xl p-4 border border-farmer-100">
+                          <Text className="text-zinc-500 text-sm mb-1.5">Expected Price</Text>
+                          <Text className="text-farmer-700 font-extrabold text-lg">
+                            ₹{d.expectedPrice || "—"}
+                          </Text>
+                        </View>
+
+                        <View className="flex-1 bg-gray-50 rounded-2xl p-4 border border-gray-200">
+                          <Text className="text-zinc-500 text-sm mb-1.5">Quantity</Text>
+                          <Text className="text-zinc-900 font-extrabold text-lg">
+                            {d.quantityValue || "—"} {d.quantityUnit}
+                          </Text>
+                        </View>
+                      </View>
+
+                      <View className="flex-row items-center justify-between mt-4">
+                        <Text className="text-zinc-500 text-sm">Tap to view details</Text>
+                        <MaterialCommunityIcons
+                          name="chevron-right"
+                          size={20}
+                          color="#9CA3AF"
+                        />
+                      </View>
+                    </ModernCard>
+                  </TouchableOpacity>
+                </AnimatedIn>
+              );
+            }
+
+            const l = item as FarmerListing;
+            const statusVariant =
+              String(l.status || "").toLowerCase() === "active"
+                ? "success"
+                : String(l.status || "").toLowerCase() === "sold"
+                  ? "info"
+                  : "default";
+
+            return (
+              <AnimatedIn delay={Math.min(index * 35, 260)} className="px-5 pt-4">
+                <ModernCard className="overflow-hidden">
+                  <Image
+                    source={{ uri: l.photoUrl || FALLBACK_IMAGE }}
+                    style={{ width: "100%", height: 160 }}
+                    resizeMode="cover"
+                  />
+                  <View className="p-5">
+                    <View className="flex-row items-center justify-between mb-3">
+                      <Text className="text-zinc-900 font-extrabold text-2xl flex-1">
+                        {l.crop?.name || "Crop"}
+                      </Text>
+                      <PillBadge
+                        label={(l.status || "active").toString()}
+                        variant={statusVariant as any}
+                      />
+                    </View>
+
+                    <View className="flex-row items-center gap-2 mb-4">
+                      <MaterialCommunityIcons name="map-marker" size={18} color="#71717A" />
+                      <Text className="text-zinc-500">
+                        {l.location?.village || "—"}, {l.location?.city || "—"}
+                      </Text>
+                    </View>
+
+                    <View className="flex-row gap-4">
+                      <View className="flex-1 bg-farmer-50 rounded-2xl p-4 border border-farmer-100">
+                        <Text className="text-zinc-500 text-sm mb-1.5">Price</Text>
+                        <Text className="text-farmer-700 font-extrabold text-lg">
+                          ₹{l.price ?? "—"}
+                        </Text>
+                      </View>
+                      <View className="flex-1 bg-gray-50 rounded-2xl p-4 border border-gray-200">
+                        <Text className="text-zinc-500 text-sm mb-1.5">Available</Text>
+                        <Text className="text-zinc-900 font-extrabold text-lg">
+                          {l.quantity ?? "—"} {l.unit ?? ""}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                </ModernCard>
+              </AnimatedIn>
+            );
+          }}
         />
       )}
 
-      {/* MODAL */}
-      {viewDemand && (
-        <Modal transparent animationType="slide">
-          <View style={styles.modalBg}>
-            <View style={styles.modalCard}>
-              <Text style={styles.modalTitle}>
-                {cropMap[viewDemand.CropId || ""] || "Crop"}
-              </Text>
+      {/* Demand modal */}
+      {viewDemand ? (
+        <Modal transparent animationType="slide" visible={!!viewDemand}>
+          <View className="flex-1 bg-black/50 items-center justify-center px-6">
+            <AnimatedIn className="w-full max-w-md">
+              <ModernCard className="overflow-hidden">
+                <View className="p-6">
+                  <View className="flex-row items-center justify-between mb-4">
+                    <View className="flex-row items-center gap-3 flex-1">
+                      <View className="h-12 w-12 rounded-2xl bg-farmer-100 items-center justify-center">
+                        <MaterialCommunityIcons
+                          name="account-search"
+                          size={24}
+                          color="#EA580C"
+                        />
+                      </View>
+                      <View className="flex-1">
+                        <Text className="text-zinc-900 font-extrabold text-xl">
+                          {viewDemand.cropName}
+                        </Text>
+                        <Text className="text-zinc-500 mt-0.5">{viewDemand.marketName}</Text>
+                      </View>
+                    </View>
+                    <TouchableOpacity
+                      onPress={() => setViewDemand(null)}
+                      className="h-10 w-10 rounded-2xl bg-zinc-100 items-center justify-center"
+                    >
+                      <MaterialCommunityIcons name="close" size={20} color="#111827" />
+                    </TouchableOpacity>
+                  </View>
 
-              <Text>Market: {viewDemand.market?.marketName || "-"}</Text>
-              <Text>
-                Expected Price: ₹{viewDemand.ExpectedPrice?.Value ?? "-"}
-              </Text>
-              <Text>
-                Quantity: {viewDemand.RequiredQuantity?.Value ?? "-"}{" "}
-                {viewDemand.RequiredQuantity?.Unit ?? ""}
-              </Text>
-              <Text>Status: {viewDemand.status || "active"}</Text>
+                  <View className="flex-row gap-4 mb-4">
+                    <View className="flex-1 bg-farmer-50 rounded-2xl p-4 border border-farmer-100">
+                      <Text className="text-zinc-500 text-sm mb-1.5">Expected Price</Text>
+                      <Text className="text-farmer-700 font-extrabold text-xl">
+                        ₹{viewDemand.expectedPrice || "—"}
+                      </Text>
+                    </View>
+                    <View className="flex-1 bg-gray-50 rounded-2xl p-4 border border-gray-200">
+                      <Text className="text-zinc-500 text-sm mb-1.5">Quantity</Text>
+                      <Text className="text-zinc-900 font-extrabold text-xl">
+                        {viewDemand.quantityValue || "—"} {viewDemand.quantityUnit}
+                      </Text>
+                    </View>
+                  </View>
 
-              <TouchableOpacity
-                style={[
-                  styles.connectBtn,
-                  connectRequested && styles.connectBtnDisabled,
-                ]}
-                disabled={connectRequested}
-                onPress={connectToBuyer}
-              >
-                <Text
-                  style={[
-                    styles.connectText,
-                    connectRequested && styles.connectTextDisabled,
-                  ]}
-                >
-                  {connectRequested ? "Requested" : "Connect to Buyer"}
-                </Text>
-              </TouchableOpacity>
+                  <View className="mb-5">
+                    <PillBadge
+                      label={(viewDemand.status || "active").toString()}
+                      variant={
+                        viewDemand.status === "active"
+                          ? "success"
+                          : viewDemand.status === "fulfilled"
+                            ? "info"
+                            : "default"
+                      }
+                    />
+                  </View>
 
-              <TouchableOpacity style={styles.contactBtn}>
-                <Text style={styles.contactText}>Contact Buyer</Text>
-              </TouchableOpacity>
+                  <TouchableOpacity
+                    activeOpacity={0.9}
+                    onPress={connectToBuyer}
+                    disabled={connectRequested}
+                    className={
+                      (connectRequested
+                        ? "bg-zinc-200"
+                        : "bg-farmer-600") +
+                      " rounded-2xl py-4 items-center mb-3"
+                    }
+                  >
+                    <Text
+                      className={
+                        (connectRequested ? "text-zinc-600" : "text-white") +
+                        " font-extrabold"
+                      }
+                    >
+                      {connectRequested ? "Requested" : "Connect to Buyer"}
+                    </Text>
+                  </TouchableOpacity>
 
-              <TouchableOpacity
-                style={styles.closeBtn}
-                onPress={() => setViewDemand(null)}
-              >
-                <Text style={styles.closeText}>Close</Text>
-              </TouchableOpacity>
-            </View>
+                  <TouchableOpacity
+                    activeOpacity={0.9}
+                    onPress={() => setViewDemand(null)}
+                    className="items-center py-2"
+                  >
+                    <Text className="text-zinc-700 font-bold">Close</Text>
+                  </TouchableOpacity>
+                </View>
+              </ModernCard>
+            </AnimatedIn>
           </View>
         </Modal>
-      )}
+      ) : null}
     </SafeAreaView>
   );
 }
-
-/* ---------- STYLES (UNCHANGED) ---------- */
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#F9FAFB", padding: 16 },
-  title: {
-    fontSize: 22,
-    fontWeight: "800",
-    textAlign: "center",
-    marginBottom: 16,
-  },
-  tabRow: {
-    flexDirection: "row",
-    backgroundColor: "#fff",
-    borderRadius: 10,
-    padding: 6,
-  },
-  tabButton: {
-    flex: 1,
-    paddingVertical: 8,
-    borderRadius: 8,
-    alignItems: "center",
-  },
-  activeTab: { backgroundColor: "#2E7D32" },
-  tabText: { fontWeight: "700", color: "#2E7D32" },
-  activeTabText: { color: "#fff" },
-
-  primaryBtn: {
-    backgroundColor: "#2E7D32",
-    paddingVertical: 10,
-    borderRadius: 10,
-    alignItems: "center",
-    marginVertical: 12,
-  },
-  primaryBtnText: { color: "#fff", fontSize: 15, fontWeight: "700" },
-
-  card: {
-    backgroundColor: "#fff",
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-  },
-  crop: { fontSize: 16, fontWeight: "700" },
-  market: { color: "#6B7280" },
-  row: { flexDirection: "row", justifyContent: "space-between" },
-  price: { color: "#2E7D32", fontWeight: "700" },
-  qty: { fontWeight: "600" },
-  status: { fontSize: 12 },
-
-  cardFooter: { marginTop: 8 },
-  viewBtn: {
-    borderWidth: 1,
-    borderColor: "#2E7D32",
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    alignSelf: "flex-start",
-  },
-  viewText: { fontSize: 12, fontWeight: "700", color: "#2E7D32" },
-
-  modalBg: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.4)",
-    justifyContent: "center",
-  },
-  modalCard: {
-    backgroundColor: "#fff",
-    margin: 20,
-    borderRadius: 12,
-    padding: 20,
-  },
-  modalTitle: { fontSize: 18, fontWeight: "800", marginBottom: 12 },
-
-  contactBtn: {
-    backgroundColor: "#2E7D32",
-    paddingVertical: 10,
-    borderRadius: 10,
-    alignItems: "center",
-    marginTop: 12,
-  },
-  contactText: { color: "#fff", fontWeight: "700" },
-
-  connectBtn: {
-    borderWidth: 1,
-    borderColor: "#2E7D32",
-    borderRadius: 10,
-    paddingVertical: 10,
-    alignItems: "center",
-    marginTop: 16,
-  },
-  connectText: { color: "#2E7D32", fontWeight: "700" },
-  connectBtnDisabled: { borderColor: "#9CA3AF" },
-  connectTextDisabled: { color: "#9CA3AF" },
-
-  closeBtn: { marginTop: 12, alignItems: "center" },
-  closeText: { fontWeight: "700", color: "#2E7D32" },
-});

@@ -1,19 +1,19 @@
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useState } from "react";
-import {
-  ActivityIndicator,
-  Alert,
-  FlatList,
-  Image,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from "react-native";
+import { Alert, FlatList, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  AnimatedIn,
+  EmptyState,
+  LoadingState,
+  ModernCard,
+  PillBadge,
+  SegmentedTabs,
+} from "../../ui/components";
 
 const BASE_URL = "https://mandiconnect.onrender.com";
 const FALLBACK_IMAGE =
@@ -170,336 +170,314 @@ export default function Marketplace() {
   /* ================= UI ================= */
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView className="flex-1 bg-gray-50">
       <StatusBar style="dark" />
 
-      <View style={styles.container}>
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>🌾 Buyer Marketplace</Text>
-        </View>
+      <View className="px-5 pt-5 pb-4 bg-white border-b border-gray-100">
+        <Text className="text-zinc-900 text-3xl font-extrabold mb-2">
+          Marketplace
+        </Text>
+        <Text className="text-zinc-500">
+          Browse listings and manage demands
+        </Text>
+      </View>
 
-        {/* MAIN TABS */}
-        <View style={styles.tabs}>
-          <TouchableOpacity
-            style={[styles.tab, activeTab === "farmer" && styles.activeTab]}
-            onPress={() => setActiveTab("farmer")}
-          >
-            <Text style={styles.tabText}>Farmer Listings</Text>
-          </TouchableOpacity>
+      <View className="px-5 py-4 bg-white">
+        <SegmentedTabs
+          tabs={[
+            { key: "farmer", label: "Farmer Listings" },
+            { key: "buyer", label: "Your Demands" },
+          ]}
+          value={activeTab}
+          onChange={(k) => setActiveTab(k as any)}
+        />
+      </View>
 
-          <TouchableOpacity
-            style={[styles.tab, activeTab === "buyer" && styles.activeTab]}
-            onPress={() => setActiveTab("buyer")}
-          >
-            <Text style={styles.tabText}>Your Demands</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* BUYER CONTROLS */}
-        {activeTab === "buyer" && (
-          <>
-            <View style={styles.statusTabs}>
-              {(["active", "fulfilled", "cancelled"] as DemandStatus[]).map(
-                (s) => (
-                  <TouchableOpacity
-                    key={s}
-                    style={[
-                      styles.statusTab,
-                      demandStatus === s && styles.activeStatusTab,
-                    ]}
-                    onPress={() => setDemandStatus(s)}
-                  >
-                    <Text
-                      style={[
-                        styles.statusText,
-                        demandStatus === s && styles.activeStatusText,
-                      ]}
-                    >
-                      {s.toUpperCase()}
-                    </Text>
-                  </TouchableOpacity>
-                ),
-              )}
-            </View>
-
-            <TouchableOpacity
-              style={styles.addDemand}
-              onPress={() => router.push("/auth/buyer/addDemand")}
-            >
-              <Text style={styles.addDemandText}>Add Demand +</Text>
-            </TouchableOpacity>
-          </>
-        )}
-
-        {loading ? (
-          <ActivityIndicator style={{ marginTop: 40 }} />
-        ) : activeTab === "farmer" ? (
-          <FlatList
-            data={farmerListings}
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            keyExtractor={(item, i) => item.id ?? i.toString()}
-            renderItem={({ item }) => (
-              <View style={styles.card}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.crop}>{item.crop?.name}</Text>
-                  <Text style={styles.location}>
-                    {item.location?.village} {item.location?.city}
-                  </Text>
-                  <Text style={styles.price}>₹{item.price}</Text>
-                  <Text>
-                    {item.quantity} {item.unit}
-                  </Text>
-
-                  <TouchableOpacity
-                    style={styles.viewButton}
-                    onPress={() => {
-                      setSelectedListing(item);
-                      setShowModal(true);
-                    }}
-                  >
-                    <Text style={styles.viewButtonText}>View</Text>
-                  </TouchableOpacity>
-                </View>
-
-                <Image
-                  source={{ uri: item.photoUrl || FALLBACK_IMAGE }}
-                  style={styles.cardImage}
-                />
-              </View>
-            )}
+      {activeTab === "buyer" ? (
+        <View className="px-5 py-4 gap-4 bg-white border-b border-gray-100">
+          <SegmentedTabs
+            tabs={[
+              { key: "active", label: "Active" },
+              { key: "fulfilled", label: "Fulfilled" },
+              { key: "cancelled", label: "Cancelled" },
+            ]}
+            value={demandStatus}
+            onChange={(k) => setDemandStatus(k as DemandStatus)}
           />
-        ) : (
-          <FlatList
-            data={buyerDemands}
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            keyExtractor={(item) => item.id}
-            ListEmptyComponent={
-              <Text style={styles.empty}>No {demandStatus} demands</Text>
-            }
-            renderItem={({ item }) => {
-              const cropName = cropMap[item.cropId] || "Crop";
-              return (
-                <View style={styles.demandCard}>
-                  <View style={styles.demandHeader}>
-                    <Text style={styles.demandCrop}>{cropName}</Text>
-                    <View style={styles.badge}>
-                      <Text style={styles.badgeText}>
-                        {item.status.toUpperCase()}
+
+          <TouchableOpacity
+            activeOpacity={0.9}
+            onPress={() => router.push("/auth/buyer/addDemand")}
+            className="bg-brand-600 rounded-2xl py-4 items-center shadow-sm"
+          >
+            <Text className="text-white font-extrabold text-base">
+              + Add Demand
+            </Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
+
+      {loading ? (
+        <LoadingState label="Loading marketplace…" />
+      ) : activeTab === "farmer" ? (
+        <FlatList
+          data={farmerListings}
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          keyExtractor={(item, i) => item.id ?? i.toString()}
+          contentContainerStyle={{ paddingBottom: 28 }}
+          renderItem={({ item, index }) => (
+            <AnimatedIn delay={Math.min(index * 35, 260)} className="px-5 pt-4">
+              <TouchableOpacity
+                activeOpacity={0.95}
+                onPress={() => {
+                  setSelectedListing(item);
+                  setShowModal(true);
+                }}
+              >
+                <ModernCard className="overflow-hidden">
+                  {/* Crop Image - Full Width */}
+                  {/* <Image
+                    source={{ uri: item.photoUrl || FALLBACK_IMAGE }}
+                    style={{ width: "100%", height: 180 }}
+                    resizeMode="cover"
+                  /> */}
+
+                  <View className="p-8">
+                    {/* Crop Name */}
+                    <Text className="text-zinc-900 font-extrabold text-2xl mb-2">
+                      {item.crop?.name || "Crop"}
+                    </Text>
+
+                    {/* Location */}
+                    <View className="flex-row items-center gap-2 mb-4">
+                      <MaterialCommunityIcons
+                        name="map-marker"
+                        size={18}
+                        color="#71717A"
+                      />
+                      <Text className="text-zinc-500 text-base">
+                        {item.location?.village}, {item.location?.city}
+                      </Text>
+                    </View>
+
+                    {/* Price & Quantity */}
+                    <View className="flex-row items-center gap-3 mb-4">
+                      <View className="flex-1 bg-brand-50 rounded-2xl p-4 border border-brand-100">
+                        <Text className="text-zinc-600 text-sm mb-1">
+                          Price per {item.unit}
+                        </Text>
+                        <Text className="text-brand-600 font-extrabold text-2xl">
+                          ₹{item.price ?? "-"}
+                        </Text>
+                      </View>
+                      <View className="flex-1 bg-gray-50 rounded-2xl p-4 border border-gray-200">
+                        <Text className="text-zinc-600 text-sm mb-1">
+                          Available
+                        </Text>
+                        <Text className="text-zinc-900 font-extrabold text-xl">
+                          {item.quantity} {item.unit}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* Farmer Badge */}
+                    <View className="flex-row items-center gap-2 bg-gray-50 rounded-xl p-3">
+                      <View className="h-10 w-10 rounded-full bg-brand-100 items-center justify-center">
+                        <MaterialCommunityIcons
+                          name="account"
+                          size={20}
+                          color="#059669"
+                        />
+                      </View>
+                      <Text className="text-zinc-600 text-sm flex-1">
+                        Posted by Farmer
+                      </Text>
+                      <MaterialCommunityIcons
+                        name="chevron-right"
+                        size={20}
+                        color="#71717A"
+                      />
+                    </View>
+                  </View>
+                </ModernCard>
+              </TouchableOpacity>
+            </AnimatedIn>
+          )}
+        />
+      ) : (
+        <FlatList
+          data={buyerDemands}
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={{ paddingBottom: 28 }}
+          ListEmptyComponent={
+            <EmptyState
+              title={`No ${demandStatus} demands`}
+              subtitle="Create a new demand to get started."
+            />
+          }
+          renderItem={({ item, index }) => {
+            const cropName = cropMap[item.cropId] || "Crop";
+            const statusVariant =
+              item.status === "active"
+                ? "success"
+                : item.status === "fulfilled"
+                  ? "info"
+                  : "danger";
+
+            return (
+              <AnimatedIn
+                delay={Math.min(index * 35, 260)}
+                className="px-5 pt-4"
+              >
+                <ModernCard className="p-5">
+                  {/* Header with Status */}
+                  <View className="flex-row items-center justify-between mb-4">
+                    <View className="flex-row items-center gap-3 flex-1">
+                      <View className="h-12 w-12 rounded-xl bg-brand-100 items-center justify-center">
+                        <MaterialCommunityIcons
+                          name="file-document-outline"
+                          size={24}
+                          color="#059669"
+                        />
+                      </View>
+                      <Text className="text-zinc-900 font-bold text-xl flex-1">
+                        {cropName}
+                      </Text>
+                    </View>
+                    <PillBadge
+                      label={
+                        item.status.charAt(0).toUpperCase() +
+                        item.status.slice(1)
+                      }
+                      variant={statusVariant}
+                    />
+                  </View>
+
+                  {/* Details Grid */}
+                  <View className="flex-row gap-4 mb-4">
+                    <View className="flex-1 bg-gray-50 rounded-2xl p-4 border border-gray-200">
+                      <Text className="text-zinc-500 text-sm mb-1.5">
+                        Quantity
+                      </Text>
+                      <Text className="text-zinc-900 font-extrabold text-lg">
+                        {item.quantity} {item.unit}
+                      </Text>
+                    </View>
+
+                    <View className="flex-1 bg-brand-50 rounded-2xl p-4 border border-brand-100">
+                      <Text className="text-zinc-500 text-sm mb-1.5">
+                        Expected Price
+                      </Text>
+                      <Text className="text-brand-600 font-extrabold text-lg">
+                        ₹{item.price}
                       </Text>
                     </View>
                   </View>
 
-                  <View style={styles.divider} />
-
-                  <View style={styles.row}>
-                    <Text>Quantity</Text>
-                    <Text>
-                      {item.quantity} {item.unit}
-                    </Text>
-                  </View>
-
-                  <View style={styles.row}>
-                    <Text>Expected Price</Text>
-                    <Text>₹{item.price}</Text>
-                  </View>
-
+                  {/* Action Button */}
                   {item.status === "active" && (
                     <TouchableOpacity
-                      style={styles.cancelSmall}
+                      activeOpacity={0.9}
                       onPress={() => cancelDemand(item.id)}
+                      className="bg-red-50 border border-red-200 rounded-xl py-3.5 items-center"
                     >
-                      <Text style={styles.cancelSmallText}>Cancel</Text>
+                      <Text className="text-red-600 font-bold">
+                        Cancel Demand
+                      </Text>
                     </TouchableOpacity>
                   )}
-                </View>
-              );
-            }}
-          />
-        )}
-      </View>
-
-      {/* FARMER MODAL */}
-      {showModal && selectedListing && (
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <Image
-              source={{ uri: selectedListing.photoUrl || FALLBACK_IMAGE }}
-              style={styles.modalImage}
-            />
-
-            <Text style={styles.modalTitle}>{selectedListing.crop?.name}</Text>
-            <Text style={styles.modalText}>
-              Location: {selectedListing.location?.village}{" "}
-              {selectedListing.location?.city}
-            </Text>
-            <Text style={styles.modalText}>
-              Quantity: {selectedListing.quantity} {selectedListing.unit}
-            </Text>
-            <Text style={styles.modalText}>
-              Price: ₹{selectedListing.price}
-            </Text>
-
-            <TouchableOpacity style={styles.contactButton}>
-              <Text style={styles.contactButtonText}>Contact Farmer</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.closeButton}
-              onPress={() => setShowModal(false)}
-            >
-              <Text style={styles.closeButtonText}>Close</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+                </ModernCard>
+              </AnimatedIn>
+            );
+          }}
+        />
       )}
+
+      {showModal && selectedListing ? (
+        <View className="absolute inset-0 bg-black/50 items-center justify-center px-8">
+          <AnimatedIn className="w-full max-w-md">
+            <ModernCard className="overflow-hidden">
+              {/* <Image
+                source={{ uri: selectedListing.photoUrl || FALLBACK_IMAGE }}
+                style={{ width: "100%", height: 200 }}
+                resizeMode="cover"
+              /> */}
+
+              <View className="p-5">
+                {/* Crop Name */}
+                <View className="flex-row items-center gap-2 mb-3">
+                  <View className="h-10 w-15 rounded-xl bg-brand-100 items-center justify-center">
+                    <MaterialCommunityIcons
+                      name="sprout"
+                      size={22}
+                      color="#059669"
+                    />
+                  </View>
+                  <Text className="text-zinc-900 font-extrabold text-xl flex-1">
+                    {selectedListing.crop?.name || "Listing"}
+                  </Text>
+                </View>
+
+                {/* Details */}
+                <View className="gap-2 mb-4">
+                  <View className="flex-row items-center gap-2">
+                    <MaterialCommunityIcons
+                      name="map-marker"
+                      size={16}
+                      color="#71717A"
+                    />
+                    <Text className="text-zinc-600">
+                      {selectedListing.location?.village},{" "}
+                      {selectedListing.location?.city}
+                    </Text>
+                  </View>
+                  <View className="flex-row items-center gap-2">
+                    <MaterialCommunityIcons
+                      name="weight-kilogram"
+                      size={16}
+                      color="#71717A"
+                    />
+                    <Text className="text-zinc-600">
+                      {selectedListing.quantity} {selectedListing.unit}
+                    </Text>
+                  </View>
+                  <View className="flex-row items-center gap-2">
+                    <MaterialCommunityIcons
+                      name="currency-inr"
+                      size={16}
+                      color="#71717A"
+                    />
+                    <Text className="text-zinc-600 font-bold">
+                      ₹{selectedListing.price}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Actions */}
+                <TouchableOpacity
+                  activeOpacity={0.9}
+                  className="bg-brand-600 rounded-2xl py-4 items-center mb-3"
+                >
+                  <Text className="text-white font-extrabold">
+                    Contact Farmer
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  activeOpacity={0.9}
+                  onPress={() => setShowModal(false)}
+                  className="items-center py-2"
+                >
+                  <Text className="text-zinc-700 font-bold">Close</Text>
+                </TouchableOpacity>
+              </View>
+            </ModernCard>
+          </AnimatedIn>
+        </View>
+      ) : null}
     </SafeAreaView>
   );
 }
-
-/* ================= STYLES ================= */
-
-const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: "#F9FAFB" },
-  container: { flex: 1, paddingHorizontal: 16, paddingTop: 12 },
-
-  header: { marginBottom: 12 },
-  headerTitle: { fontSize: 22, fontWeight: "800", textAlign: "center" },
-
-  tabs: {
-    flexDirection: "row",
-    backgroundColor: "#E5E7EB",
-    borderRadius: 12,
-    marginBottom: 12,
-  },
-  tab: { flex: 1, paddingVertical: 10, alignItems: "center" },
-  activeTab: { backgroundColor: "#fff", borderRadius: 12 },
-  tabText: { fontWeight: "700" },
-
-  statusTabs: {
-    flexDirection: "row",
-    backgroundColor: "#E5E7EB",
-    borderRadius: 10,
-    marginBottom: 10,
-  },
-  statusTab: { flex: 1, paddingVertical: 8, alignItems: "center" },
-  activeStatusTab: { backgroundColor: "#fff", borderRadius: 10 },
-  statusText: { fontWeight: "700", color: "#6B7280" },
-  activeStatusText: { color: "#111827" },
-
-  addDemand: {
-    backgroundColor: "#2E7D32",
-    padding: 12,
-    borderRadius: 12,
-    alignItems: "center",
-    marginBottom: 10,
-  },
-  addDemandText: { color: "#fff", fontWeight: "700" },
-
-  card: {
-    backgroundColor: "#fff",
-    borderRadius: 16,
-    padding: 14,
-    marginBottom: 12,
-    flexDirection: "row",
-  },
-  cardImage: {
-    width: 90,
-    height: 90,
-    borderRadius: 14,
-    marginLeft: 10,
-  },
-
-  crop: { fontSize: 16, fontWeight: "700" },
-  location: { color: "#6B7280" },
-  price: { color: "#2E7D32", fontWeight: "800" },
-
-  viewButton: {
-    marginTop: 8,
-    backgroundColor: "#16A34A",
-    paddingVertical: 6,
-    paddingHorizontal: 14,
-    borderRadius: 8,
-    alignSelf: "flex-start",
-  },
-  viewButtonText: { color: "#fff", fontWeight: "700" },
-
-  demandCard: {
-    backgroundColor: "#fff",
-    borderRadius: 18,
-    padding: 16,
-    marginBottom: 12,
-  },
-  demandHeader: { flexDirection: "row", justifyContent: "space-between" },
-  demandCrop: { fontSize: 17, fontWeight: "800" },
-  badge: {
-    backgroundColor: "#16A34A",
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 999,
-  },
-  badgeText: { color: "#fff", fontSize: 12, fontWeight: "700" },
-
-  divider: {
-    height: 1,
-    backgroundColor: "#E5E7EB",
-    marginVertical: 12,
-  },
-  row: { flexDirection: "row", justifyContent: "space-between" },
-
-  cancelSmall: {
-    marginTop: 10,
-    alignSelf: "flex-start",
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    backgroundColor: "#FEE2E2",
-    borderRadius: 6,
-  },
-  cancelSmallText: {
-    color: "#DC2626",
-    fontSize: 12,
-    fontWeight: "700",
-  },
-
-  modalOverlay: {
-    position: "absolute",
-    top: 0,
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: "rgba(0,0,0,0.4)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  modalCard: {
-    backgroundColor: "#fff",
-    width: "85%",
-    borderRadius: 16,
-    padding: 20,
-  },
-
-  modalImage: {
-    width: "100%",
-    height: 160,
-    borderRadius: 12,
-    marginBottom: 12,
-  },
-
-  modalTitle: { fontSize: 18, fontWeight: "800", marginBottom: 10 },
-  modalText: { marginBottom: 6, color: "#374151" },
-
-  contactButton: {
-    backgroundColor: "#2E7D32",
-    padding: 12,
-    borderRadius: 10,
-    marginTop: 12,
-    alignItems: "center",
-  },
-  contactButtonText: { color: "#fff", fontWeight: "700" },
-
-  closeButton: { marginTop: 10, alignItems: "center" },
-  closeButtonText: { color: "#DC2626", fontWeight: "700" },
-
-  empty: { textAlign: "center", marginTop: 40, color: "#6B7280" },
-});

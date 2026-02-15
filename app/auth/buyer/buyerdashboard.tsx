@@ -1,10 +1,10 @@
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
 import { useCallback, useEffect, useState } from "react";
 import {
-  ActivityIndicator,
   FlatList,
-  StyleSheet,
+  ScrollView,
   Text,
   TextInput,
   TouchableOpacity,
@@ -14,6 +14,7 @@ import {
   SafeAreaView,
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
+import { AnimatedIn, ModernCard, PillBadge, StatBadge } from "../../ui/components";
 
 const BASE_URL = "https://mandiconnect.onrender.com";
 
@@ -119,213 +120,181 @@ export default function BuyerHome() {
     item.crop.name.toLowerCase().includes(search.toLowerCase()),
   );
 
-  const renderItem = ({ item }: { item: CropStats }) => {
+  /* ================= RENDER CARD ================= */
+
+  const renderItem = ({ item, index }: { item: CropStats; index: number }) => {
     const d = item.dailyStats;
     const isOpen = expanded[item.crop.id];
+    
+    // Calculate price change from trend
+    const priceChange = item.trend && item.trend.length > 1
+      ? d.averagePrice - item.trend[0].averagePrice
+      : 0;
+    const isIncrease = priceChange > 0;
 
     return (
-      <View style={styles.card}>
-        <View style={styles.cardHeader}>
-          <View>
-            <Text style={styles.crop}>{item.crop.name}</Text>
-            <Text style={styles.market}>{item.mandi.marketName}</Text>
-          </View>
-
-          <View style={styles.priceBox}>
-            <Text style={styles.price}>₹{d.averagePrice}</Text>
-            <Text style={styles.unit}>/{item.crop.displayUnit}</Text>
-          </View>
-        </View>
-
-        <View style={styles.rangeRow}>
-          <Text style={styles.range}>Min ₹{d.minPrice}</Text>
-          <Text style={styles.range}>Max ₹{d.maxPrice}</Text>
-        </View>
-
-        <Text style={styles.time}>
-          Updated {new Date(d.lastUpdated).toLocaleString()}
-        </Text>
-
-        <TouchableOpacity
-          style={styles.trendToggleBox}
-          onPress={() =>
-            setExpanded((p) => ({ ...p, [item.crop.id]: !isOpen }))
-          }
-        >
-          <Text style={styles.trendToggle}>
-            {isOpen ? "Hide price trend ▲" : "Show price trend ▼"}
-          </Text>
-        </TouchableOpacity>
-
-        {isOpen && (
-          <View style={styles.trendContainer}>
-            {item.trend?.map((t, i) => (
-              <View key={i} style={styles.trendRow}>
-                <Text style={styles.trendDate}>
-                  {new Date(t.date).toDateString()}
-                </Text>
-                <Text style={styles.trendPrice}>₹{t.averagePrice}</Text>
+      <AnimatedIn delay={Math.min(index * 50, 250)} className="px-5 mb-4">
+        <ModernCard className="p-5">
+          {/* Header Row with Icon */}
+          <View className="flex-row items-start justify-between mb-4">
+            <View className="flex-1">
+              <View className="flex-row items-center gap-3 mb-2">
+                <View className="h-12 w-12 rounded-2xl bg-brand-100 items-center justify-center">
+                  <MaterialCommunityIcons name="sprout" size={24} color="#059669" />
+                </View>
+                <View className="flex-1">
+                  <Text className="text-zinc-900 text-xl font-bold">{item.crop.name}</Text>
+                  <Text className="text-zinc-500 text-sm mt-0.5">{item.mandi.marketName}</Text>
+                </View>
               </View>
-            ))}
+            </View>
+
+            {/* Price Badge */}
+            <View className="items-end">
+              <Text className="text-brand-600 text-3xl font-extrabold">
+                ₹{d.averagePrice}
+              </Text>
+              <Text className="text-zinc-500 text-sm font-semibold">/{item.crop.displayUnit}</Text>
+            </View>
           </View>
-        )}
-      </View>
+
+          {/* Price Range */}
+          <View className="flex-row items-center gap-4 mb-4 bg-gray-50 rounded-2xl p-4">
+            <View className="flex-1">
+              <Text className="text-zinc-500 text-sm mb-1.5">Min Price</Text>
+              <Text className="text-zinc-900 font-bold text-lg">₹{d.minPrice}</Text>
+            </View>
+            <View className="h-10 w-px bg-zinc-200" />
+            <View className="flex-1">
+              <Text className="text-zinc-500 text-sm mb-1.5">Max Price</Text>
+              <Text className="text-zinc-900 font-bold text-lg">₹{d.maxPrice}</Text>
+            </View>
+          </View>
+
+          {/* Trend Badge */}
+          {priceChange !== 0 && (
+            <View className="mb-3">
+              <PillBadge
+                label={`${isIncrease ? "+" : ""}₹${Math.abs(priceChange).toFixed(0)} ${isIncrease ? "increase" : "decrease"}`}
+                variant={isIncrease ? "success" : "danger"}
+              />
+            </View>
+          )}
+
+          {/* Stale Indicator */}
+          {d.isStale && (
+            <View className="mb-3">
+              <PillBadge label="Price data may be outdated" variant="warning" />
+            </View>
+          )}
+
+          {/* Timestamp */}
+          <Text className="text-zinc-400 text-xs mb-3">
+            Updated: {new Date(d.lastUpdated).toLocaleString()}
+          </Text>
+
+          {/* Trend Toggle */}
+          {item.trend && item.trend.length > 0 && (
+            <>
+              <TouchableOpacity
+                onPress={() =>
+                  setExpanded((p) => ({
+                    ...p,
+                    [item.crop.id]: !isOpen,
+                  }))
+                }
+                className="flex-row items-center justify-center py-2 bg-brand-50 rounded-xl"
+              >
+                <Text className="text-brand-600 font-bold text-sm mr-1">
+                  {isOpen ? "Hide" : "View"} Price Trend
+                </Text>
+                <MaterialCommunityIcons
+                  name={isOpen ? "chevron-up" : "chevron-down"}
+                  size={18}
+                  color="#059669"
+                />
+              </TouchableOpacity>
+
+              {/* Trend Section */}
+              {isOpen && (
+                <View className="mt-3 pt-3 border-t border-zinc-200">
+                  {item.trend.map((t, i) => (
+                    <View
+                      key={i}
+                      className="flex-row justify-between items-center py-2"
+                    >
+                      <Text className="text-zinc-600 text-sm">
+                        {new Date(t.date).toLocaleDateString()}
+                      </Text>
+                      <Text className="text-zinc-900 font-bold">₹{t.averagePrice}</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </>
+          )}
+        </ModernCard>
+      </AnimatedIn>
     );
   };
 
-  return (
-    <SafeAreaView style={styles.safeArea}>
-      <View style={[styles.container, { paddingTop: insets.top + 12 }]}>
-        {/* HEADER */}
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>🌾 Market Prices</Text>
-        </View>
+  /* ================= RETURN ================= */
 
-        {/* SEARCH */}
-        <View style={styles.searchBox}>
+  return (
+    <SafeAreaView className="flex-1 bg-gray-50">
+      {/* Header with Stats */}
+      <View className="px-5 pt-5 pb-4 bg-white border-b border-gray-100">
+        <Text className="text-zinc-900 text-3xl font-extrabold mb-2">
+          Market Dashboard
+        </Text>
+        <Text className="text-zinc-500 mb-6">Live crop prices from mandis</Text>
+
+        {/* Stat Circles Row */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ gap: 16, paddingRight: 20 }}
+        >
+          <StatBadge icon="sprout" value={stats.length} label="Total Crops" color="brand" />
+          <StatBadge
+            icon="store"
+            value={stats[0]?.mandi.marketName.split(" ")[0] || "—"}
+            label="Market"
+            color="blue"
+          />
+          <StatBadge
+            icon="chart-line"
+            value={`₹${stats[0]?.dailyStats.averagePrice || 0}`}
+            label="Top Price"
+            color="orange"
+          />
+        </ScrollView>
+      </View>
+
+      {/* Search */}
+      <View className="px-5 py-4 bg-white">
+        <View className="flex-row items-center bg-gray-50 rounded-2xl px-4 py-4 border border-gray-200">
+          <MaterialCommunityIcons name="magnify" size={22} color="#71717A" />
           <TextInput
-            placeholder="Search crop"
+            placeholder="Search crops..."
             value={search}
             onChangeText={setSearch}
-            style={styles.searchInput}
-            placeholderTextColor="#000000"
+            placeholderTextColor="#A1A1AA"
+            className="flex-1 ml-3 text-zinc-900 text-base"
           />
         </View>
-
-        {loading ? (
-          <ActivityIndicator size="large" style={{ marginTop: 40 }} />
-        ) : (
-          <FlatList
-            data={filteredStats}
-            renderItem={renderItem}
-            keyExtractor={(item) => item.crop.id}
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            showsVerticalScrollIndicator={false}
-          />
-        )}
       </View>
+
+      {/* List */}
+      <FlatList
+        data={filteredStats}
+        renderItem={renderItem}
+        keyExtractor={(item) => item.crop.id}
+        refreshing={refreshing}
+        onRefresh={onRefresh}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: insets.bottom + 30 }}
+      />
     </SafeAreaView>
   );
 }
-
-/* ================= STYLES ================= */
-
-const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: "#F3F4F6",
-  },
-  container: {
-    flex: 1,
-    paddingHorizontal: 16,
-  },
-
-  header: {
-    marginBottom: 14,
-  },
-  headerTitle: {
-    fontSize: 22,
-    fontWeight: "800",
-    textAlign: "center",
-    color: "#111827",
-  },
-
-  searchBox: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 14,
-    paddingHorizontal: 16,
-    paddingVertical: 5,
-    marginBottom: 14,
-  },
-  searchInput: {
-    fontSize: 15,
-    color: "#000000",
-  },
-
-  card: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 18,
-    padding: 16,
-    marginBottom: 14,
-  },
-
-  cardHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-
-  crop: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#111827",
-  },
-  market: {
-    fontSize: 13,
-    color: "#6B7280",
-    marginTop: 2,
-  },
-
-  priceBox: {
-    alignItems: "flex-end",
-  },
-  price: {
-    fontSize: 22,
-    fontWeight: "800",
-    color: "#16A34A",
-  },
-  unit: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#16A34A",
-  },
-
-  rangeRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginTop: 10,
-  },
-  range: {
-    fontSize: 13,
-    color: "#374151",
-    fontWeight: "600",
-  },
-
-  time: {
-    fontSize: 11,
-    color: "#9CA3AF",
-    marginTop: 6,
-  },
-
-  trendToggleBox: {
-    marginTop: 12,
-  },
-  trendToggle: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#16A34A",
-  },
-
-  trendContainer: {
-    marginTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: "#E5E7EB",
-    paddingTop: 8,
-  },
-
-  trendRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    paddingVertical: 6,
-  },
-  trendDate: {
-    fontSize: 12,
-    color: "#6B7280",
-  },
-  trendPrice: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#111827",
-  },
-});

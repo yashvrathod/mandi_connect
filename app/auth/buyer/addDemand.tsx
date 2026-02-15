@@ -18,6 +18,7 @@ import {
   SafeAreaView,
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
+import { BuyerBanner } from "../../ui/components";
 
 const BASE_URL = "https://mandiconnect.onrender.com";
 
