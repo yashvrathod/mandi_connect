@@ -17,9 +17,9 @@ export default function FarmerLayout() {
   useEffect(() => {
     const checkFarmerAuth = async () => {
       const token = await AsyncStorage.getItem("token");
-      const role = await AsyncStorage.getItem("role");
+      const userRole = await AsyncStorage.getItem("userRole");
 
-      if (!token || role !== "farmer") {
+      if (!token || userRole !== "farmer") {
         router.replace("/auth/farmerlogin");
         return;
       }
@@ -44,12 +44,14 @@ export default function FarmerLayout() {
         screenOptions={{
           headerShown: false,
           tabBarHideOnKeyboard: true,
-          tabBarActiveTintColor: "#EA580C",
+          tabBarActiveTintColor: "#1E7D3A",
           tabBarInactiveTintColor: "#9CA3AF",
           tabBarStyle: {
             backgroundColor: "#fff",
             height: TAB_BAR_HEIGHT,
             paddingBottom: insets.bottom > 0 ? insets.bottom : 6,
+            borderTopColor: "#C6E6D3",
+            borderTopWidth: 1,
           },
           tabBarLabelStyle: {
             fontSize: 12,

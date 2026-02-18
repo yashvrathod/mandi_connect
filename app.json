@@ -11,11 +11,11 @@
       "android",
       "web"
     ],
-    "icon": "./assets/images/banner.jpg",
+    "icon": "./assets/images/Buyer.png",
     "splash": {
       "image": "./assets/images/background.jpg",
       "resizeMode": "cover",
-      "backgroundColor": "#10B981"
+      "backgroundColor": "#1E7D3A"
     },
     "updates": {
       "enabled": true
@@ -32,7 +32,7 @@
     "android": {
       "package": "com.mandiconnect.app",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/banner.jpg",
+        "foregroundImage": "./assets/images/Buyer.png",
         "backgroundColor": "#10B981"
       },
       "permissions": [

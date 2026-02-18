@@ -1,10 +1,10 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import axios from "axios";
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useState } from "react";
 import { Alert, Platform, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useAuth } from "../../context/AuthContext";
+import { authAPI } from "../../services/api";
 import {
   AuthBackground,
   AuthCard,
@@ -25,6 +25,7 @@ const showAlert = (title: string, message: string) => {
 
 export default function FarmerLogin() {
   const router = useRouter();
+  const { login } = useAuth();
 
   const [email, setEmail] = useState<string>("");
   const [password, setPassword] = useState<string>("");
@@ -42,27 +43,30 @@ export default function FarmerLogin() {
 
     setLoading(true);
     try {
-      const response = await axios.post(
-        "https://mandiconnect.onrender.com/farmer/login",
-        {
-          email: emailValue,
-          password: passwordValue,
-        },
-        { headers: { "Content-Type": "application/json" } },
-      );
+      const response = await authAPI.farmerLogin({
+        email: emailValue,
+        password: passwordValue,
+      });
 
       if (response.data?.token) {
-        await AsyncStorage.setItem("token", response.data.token);
-        await AsyncStorage.setItem("farmerId", response.data["User ID"]);
-        await AsyncStorage.setItem("role", "farmer");
+        // Save to AuthContext
+        await login(response.data.token, {
+          id: response.data["User ID"] || response.data.data?._id,
+          email: emailValue,
+          name: response.data.data?.name || response.data.data?.fullName || "",
+          role: "farmer",
+          ...response.data.data,
+        });
 
-        showAlert("Success", "Login successful");
-        router.replace("/auth/farmer/farmer-dashboard");
+        console.log("Farmer Login - Auth saved, navigating to dashboard");
+
+        // Use push instead of replace for better compatibility
+        router.push("/auth/farmer/farmer-dashboard");
       }
     } catch (error: any) {
       showAlert(
         "Login Failed",
-        error.response?.data || "Invalid email or password",
+        error.response?.data?.message || "Invalid email or password",
       );
     } finally {
       setLoading(false);
@@ -72,12 +76,10 @@ export default function FarmerLogin() {
   return (
     <AuthBackground>
       <SafeAreaView className="flex-1">
-        <StatusBar style="light" />
+        <StatusBar style="dark" />
 
         <View className="flex-1 px-5 py-10 justify-center">
           <View className="w-full max-w-md mx-auto">
-            <AuthHeader title="Farmer Sign In" subtitle="Login with your credentials" />
-
             <View className="mb-4">
               <AuthSegmentedTabs
                 leftLabel="Sign In"
@@ -89,7 +91,13 @@ export default function FarmerLogin() {
             </View>
 
             <AuthCard>
-              <View className="gap-4">
+              <AuthHeader 
+                title="Farmer Login" 
+                subtitle="Welcome back!" 
+                icon="lock-outline"
+              />
+
+              <View className="gap-4 mt-4">
                 <AuthTextField
                   label="Email"
                   icon="email-outline"
@@ -111,23 +119,36 @@ export default function FarmerLogin() {
                   right={<EyeToggle shown={showPassword} onPress={() => setShowPassword(!showPassword)} />}
                 />
 
+                <TouchableOpacity 
+                  onPress={() => router.push("/auth/forgotpassword?role=farmer")}
+                  className="self-end"
+                >
+                  <Text className="text-agri-primary text-sm font-semibold">
+                    Forgot Password?
+                  </Text>
+                </TouchableOpacity>
+
                 <TouchableOpacity
                   onPress={handleLogin}
                   disabled={loading}
-                  className="bg-farmer-600 rounded-2xl py-4 mt-2"
+                  className="bg-agri-primary rounded-2xl py-4 mt-2"
                   activeOpacity={0.9}
                 >
-                  <Text className="text-white text-center font-extrabold text-base">
-                    {loading ? "Signing in…" : "Sign In"}
+                  <Text className="text-white text-center font-bold text-base">
+                    {loading ? "Signing in…" : "Login"}
                   </Text>
                 </TouchableOpacity>
 
                 <View className="flex-row justify-center items-center pt-2">
-                  <Text className="text-zinc-400 text-sm">Don&apos;t have an account? </Text>
+                  <Text className="text-gray-600 text-sm">Don&apos;t have an account? </Text>
                   <TouchableOpacity onPress={() => router.push("/auth/farmersignup")}>
-                    <Text className="text-farmer-400 text-sm font-semibold">Sign Up</Text>
+                    <Text className="text-agri-primary text-sm font-semibold">Create Account</Text>
                   </TouchableOpacity>
                 </View>
+
+                <Text className="text-gray-500 text-xs text-center mt-2">
+                  🔒 Secure login protected
+                </Text>
               </View>
             </AuthCard>
           </View>

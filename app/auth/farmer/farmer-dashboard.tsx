@@ -1,6 +1,5 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import axios from "axios";
+import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -12,6 +11,8 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { useAuth } from "../../../context/AuthContext";
+import { priceAPI, farmerMarketplaceAPI } from "../../../services/api";
 import {
   AnimatedIn,
   EmptyState,
@@ -21,8 +22,6 @@ import {
   SegmentedTabs,
   StatBadge,
 } from "../../ui/components";
-
-const BASE_URL = "https://mandiconnect.onrender.com";
 
 type TabKey = "community" | "marketStats";
 
@@ -57,7 +56,9 @@ function formatEntry(e: Entry) {
 }
 
 export default function FarmerDashboard() {
+  const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { logout, user } = useAuth();
 
   const [activeTab, setActiveTab] = useState<TabKey>("community");
   const [communityEntries, setCommunityEntries] = useState<Entry[]>([]);
@@ -76,16 +77,38 @@ export default function FarmerDashboard() {
     [viewEntry],
   );
 
-  const getHeaders = async () => ({
-    Authorization: `Bearer ${await AsyncStorage.getItem("token")}`,
-  });
-
   const fetchCommunity = async () => {
     try {
-      const res = await axios.get(`${BASE_URL}/farmer-entries/getAllEntries`, {
-        headers: await getHeaders(),
-      });
-      setCommunityEntries(Array.isArray(res.data) ? res.data : []);
+      const res = await priceAPI.getAllPriceEntries();
+      const entries = Array.isArray(res.data) ? res.data : res.data.data || [];
+      setCommunityEntries(entries);
+
+      // Fetch agree/disagree counts for each entry
+      const reactionData: Record<string, ReactionState> = {};
+      for (const entry of entries) {
+        const entryId = entry._id;
+        if (entryId) {
+          try {
+            const [agreeRes, disagreeRes] = await Promise.all([
+              priceAPI.getAgreeCount(entryId),
+              priceAPI.getDisagreeCount(entryId),
+            ]);
+            reactionData[entryId] = {
+              type: null,
+              likes: agreeRes.data?.count || 0,
+              dislikes: disagreeRes.data?.count || 0,
+            };
+          } catch (e) {
+            // Skip if counts fail
+          }
+        }
+      }
+      setReactions(reactionData);
+    } catch (error: any) {
+      console.error("Error fetching community entries:", error);
+      if (error.response?.status === 401) {
+        await logout();
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -94,10 +117,13 @@ export default function FarmerDashboard() {
 
   const fetchMarketStats = async () => {
     try {
-      const res = await axios.get(`${BASE_URL}/marketplace/farmer/getAllListing`, {
-        headers: await getHeaders(),
-      });
-      setMarketStatsEntries(Array.isArray(res.data) ? res.data : []);
+      const res = await farmerMarketplaceAPI.getAllListings();
+      setMarketStatsEntries(Array.isArray(res.data) ? res.data : res.data.data || []);
+    } catch (error: any) {
+      console.error("Error fetching market stats:", error);
+      if (error.response?.status === 401) {
+        await logout();
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -123,43 +149,54 @@ export default function FarmerDashboard() {
     }
   };
 
-  const handleReaction = (id: string, type: "like" | "dislike") => {
-    setReactions((prev) => {
-      const current = prev[id] || { type: null, likes: 0, dislikes: 0 };
+  const handleReaction = async (id: string, type: "like" | "dislike") => {
+    const current = reactions[id] || { type: null, likes: 0, dislikes: 0 };
 
-      if (current.type === type) {
+    // Don't allow double reaction
+    if (current.type === type) return;
+
+    const farmerId = user?.id || "";
+    
+    if (!farmerId) {
+      console.error("Farmer ID not found");
+      return;
+    }
+
+    try {
+      // Call API with correct parameters: entryId and farmerId
+      if (type === "like") {
+        await priceAPI.priceAgree(id, farmerId);
+      } else {
+        await priceAPI.priceDisagree(id, farmerId);
+      }
+
+      // Update local state
+      setReactions((prev) => {
         return {
           ...prev,
           [id]: {
-            type: null,
-            likes: type === "like" ? Math.max(0, current.likes - 1) : current.likes,
+            type,
+            likes:
+              type === "like"
+                ? current.likes + 1
+                : current.type === "like"
+                  ? Math.max(0, current.likes - 1)
+                  : current.likes,
             dislikes:
               type === "dislike"
-                ? Math.max(0, current.dislikes - 1)
-                : current.dislikes,
+                ? current.dislikes + 1
+                : current.type === "dislike"
+                  ? Math.max(0, current.dislikes - 1)
+                  : current.dislikes,
           },
         };
+      });
+    } catch (error: any) {
+      console.error("Error voting:", error);
+      if (error.response?.status === 401) {
+        await logout();
       }
-
-      return {
-        ...prev,
-        [id]: {
-          type,
-          likes:
-            type === "like"
-              ? current.likes + 1
-              : current.type === "like"
-                ? Math.max(0, current.likes - 1)
-                : current.likes,
-          dislikes:
-            type === "dislike"
-              ? current.dislikes + 1
-              : current.type === "dislike"
-                ? Math.max(0, current.dislikes - 1)
-                : current.dislikes,
-        },
-      };
-    });
+    }
   };
 
   const data = activeTab === "community" ? communityEntries : marketStatsEntries;
@@ -200,9 +237,19 @@ export default function FarmerDashboard() {
 
       {/* Header */}
       <View className="px-5 pt-5 pb-4 bg-white border-b border-gray-100">
-        <Text className="text-zinc-900 text-3xl font-extrabold mb-2">
-          Farmer Dashboard
-        </Text>
+        <View className="flex-row items-center justify-between mb-2">
+          <Text className="text-zinc-900 text-3xl font-extrabold">
+            Farmer Dashboard
+          </Text>
+          <TouchableOpacity
+            onPress={() => router.push("/auth/farmer/analytics" as any)}
+            className="bg-agri-primary rounded-xl px-4 py-2.5 flex-row items-center gap-2"
+            activeOpacity={0.8}
+          >
+            <MaterialCommunityIcons name="chart-box" size={18} color="white" />
+            <Text className="text-white font-bold text-sm">Analytics</Text>
+          </TouchableOpacity>
+        </View>
         <Text className="text-zinc-500 mb-6">
           Track community prices and manage your listings
         </Text>

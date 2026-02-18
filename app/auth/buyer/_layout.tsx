@@ -17,9 +17,9 @@ export default function BuyerLayout() {
   useEffect(() => {
     const checkBuyerAuth = async () => {
       const token = await AsyncStorage.getItem("token");
-      const role = await AsyncStorage.getItem("role");
+      const userRole = await AsyncStorage.getItem("userRole");
 
-      if (!token || role !== "buyer") {
+      if (!token || userRole !== "buyer") {
         router.replace("/auth/buyerlogin");
         return;
       }
@@ -43,15 +43,15 @@ export default function BuyerLayout() {
       <Tabs
         screenOptions={{
           headerShown: false,
-
-          tabBarHideOnKeyboard: true, // ✅ FIXED HERE
-
-          tabBarActiveTintColor: "#2E7D32",
+          tabBarHideOnKeyboard: true,
+          tabBarActiveTintColor: "#1E7D3A",
           tabBarInactiveTintColor: "#9CA3AF",
           tabBarStyle: {
             backgroundColor: "#fff",
             height: TAB_BAR_HEIGHT,
             paddingBottom: insets.bottom > 0 ? insets.bottom : 6,
+            borderTopColor: "#C6E6D3",
+            borderTopWidth: 1,
           },
           tabBarLabelStyle: {
             fontSize: 12,

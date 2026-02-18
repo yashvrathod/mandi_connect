@@ -40,6 +40,14 @@ module.exports = {
           card: "#2C2C2E",
           input: "#3A3A3C",
         },
+        // Agricultural green theme colors from Prompt
+        agri: {
+          bg: "#E8F3EC",        // Soft pastel background
+          primary: "#1E7D3A",   // Deep green primary
+          light: "#F0F9F4",     // Lighter variant
+          border: "#C6E6D3",    // Soft green border
+          text: "#0F5A28",      // Dark green text
+        },
       },
       // Add box shadow support for React Native
       boxShadow: {

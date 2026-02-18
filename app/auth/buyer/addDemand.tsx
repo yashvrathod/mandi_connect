@@ -1,7 +1,4 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import axios from "axios";
-import { Buffer } from "buffer";
 import { router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useState } from "react";
@@ -18,9 +15,9 @@ import {
   SafeAreaView,
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
+import { useAuth } from "../../../context/AuthContext";
+import { commonAPI, buyerMarketplaceAPI, authAPI } from "../../../services/api";
 import { BuyerBanner } from "../../ui/components";
-
-const BASE_URL = "https://mandiconnect.onrender.com";
 
 /* ---------- TYPES ---------- */
 type Crop = {
@@ -29,14 +26,8 @@ type Crop = {
   type: string;
 };
 
-/* ---------- JWT decoder (Expo-safe) ---------- */
-const decodeJwt = (token: string) => {
-  const payload = token.split(".")[1];
-  const decoded = Buffer.from(payload, "base64").toString("utf8");
-  return JSON.parse(decoded);
-};
-
 export default function AddDemand() {
+  const { user, logout } = useAuth();
   const insets = useSafeAreaInsets();
 
   const [crops, setCrops] = useState<Crop[]>([]);
@@ -61,12 +52,7 @@ export default function AddDemand() {
   /* ---------- Fetch crops ---------- */
   const fetchCrops = async () => {
     try {
-      const token = await AsyncStorage.getItem("token");
-      if (!token) return;
-
-      const res = await axios.get(`${BASE_URL}/getAllCrop`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await commonAPI.getAllCrops();
 
       setCrops(
         res.data.map((c: any) => ({
@@ -75,38 +61,29 @@ export default function AddDemand() {
           type: c.type,
         })),
       );
-    } catch {
+    } catch (error: any) {
+      if (error.response?.status === 401) await logout();
       Alert.alert("Failed to load crops");
     }
   };
 
   /* ---------- Resolve buyer id ---------- */
   const resolveBuyerId = async (): Promise<string> => {
-    const stored = await AsyncStorage.getItem("buyerId");
-    if (stored) return stored;
+    // Use user ID from AuthContext
+    if (user?.id) return user.id;
 
-    const token = await AsyncStorage.getItem("token");
-    if (!token) throw new Error("Missing token");
-
-    const decoded = decodeJwt(token);
-    const email = decoded.email?.toLowerCase() || decoded.sub?.toLowerCase();
-
-    if (!email) {
-      throw new Error("Email not found in token");
+    // Fallback: fetch from API
+    try {
+      const res = await authAPI.getAllBuyers();
+      const buyer = res.data.find((b: any) => 
+        b.Email?.toLowerCase() === user?.email?.toLowerCase()
+      );
+      
+      if (buyer?.id) return buyer.id;
+      throw new Error("Buyer not found");
+    } catch (error) {
+      throw new Error("Failed to resolve buyer ID");
     }
-
-    const res = await axios.get(`${BASE_URL}/buyer/getAll`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-
-    const buyer = res.data.find((b: any) => b.Email?.toLowerCase() === email);
-
-    if (!buyer?.id) {
-      throw new Error("Buyer not found for this account");
-    }
-
-    await AsyncStorage.setItem("buyerId", buyer.id);
-    return buyer.id;
   };
 
   /* ---------- Submit demand ---------- */
@@ -118,30 +95,28 @@ export default function AddDemand() {
 
     try {
       setLoading(true);
-      const token = await AsyncStorage.getItem("token");
-      if (!token) throw new Error("Missing token");
-
       const buyerId = await resolveBuyerId();
 
-      await axios.post(
-        `${BASE_URL}/marketplace/buyer/add`,
-        {
-          BuyerId: buyerId,
-          CropId: selectedCrop.id,
-          RequiredQuantity: { Value: Number(quantity), Unit: "kg" },
-          ExpectedPrice: { Value: Number(price), Currency: "INR" },
-          Market: market,
-        },
-        { headers: { Authorization: `Bearer ${token}` } },
-      );
+      await buyerMarketplaceAPI.addDemand({
+        BuyerId: buyerId,
+        CropId: selectedCrop.id,
+        RequiredQuantity: { Value: Number(quantity), Unit: "kg" },
+        ExpectedPrice: { Value: Number(price), Currency: "INR" },
+        Market: market,
+      });
 
       Alert.alert("Success", "Demand added successfully");
       router.replace("/auth/buyer/marketplace");
     } catch (err: any) {
-      Alert.alert(
-        "Error",
-        err?.response?.data?.message || err.message || "Something went wrong",
-      );
+      if (err.response?.status === 401) {
+        await logout();
+        router.replace("/auth/buyerlogin");
+      } else {
+        Alert.alert(
+          "Error",
+          err?.response?.data?.message || err.message || "Something went wrong",
+        );
+      }
     } finally {
       setLoading(false);
     }
@@ -153,13 +128,12 @@ export default function AddDemand() {
 
     try {
       setAddingCrop(true);
-      const token = await AsyncStorage.getItem("token");
 
-      await axios.post(
-        `${BASE_URL}/addCrop`,
-        { name: cropName, type: cropType, variety: cropVariety },
-        { headers: { Authorization: `Bearer ${token}` } },
-      );
+      await commonAPI.addCrop({
+        name: cropName,
+        type: cropType,
+        variety: cropVariety,
+      });
 
       setShowAddCrop(false);
       setCropName("");
@@ -167,6 +141,7 @@ export default function AddDemand() {
       setCropVariety("");
       fetchCrops();
     } catch (err: any) {
+      if (err.response?.status === 401) await logout();
       Alert.alert(
         "Error",
         err?.response?.data?.message || err.message || "Failed to add crop",

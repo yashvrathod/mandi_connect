@@ -12,7 +12,7 @@ export function Screen({
   children: React.ReactNode;
   className?: string;
 }) {
-  return <View className={cn("flex-1 bg-zinc-50", className)}>{children}</View>;
+  return <View className={cn("flex-1 bg-agri-bg", className)}>{children}</View>;
 }
 
 export function AuthBackground({
@@ -136,18 +136,11 @@ export function PrimaryButton({
       onPress={onPress}
       disabled={loading}
       activeOpacity={0.9}
-      className={cn("overflow-hidden rounded-2xl", className)}
+      className={cn("bg-agri-primary rounded-2xl px-4 py-4 items-center", loading && "opacity-80", className)}
     >
-      <LinearGradient
-        colors={["#10B981", "#047857"]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        className={cn("px-4 py-4 items-center", loading && "opacity-80")}
-      >
-        <Text className="text-white font-bold text-base">
-          {loading ? "Please wait…" : title}
-        </Text>
-      </LinearGradient>
+      <Text className="text-white font-bold text-base">
+        {loading ? "Please wait…" : title}
+      </Text>
     </TouchableOpacity>
   );
 }
@@ -166,11 +159,11 @@ export function SecondaryButton({
       onPress={onPress}
       activeOpacity={0.9}
       className={cn(
-        "rounded-2xl border border-zinc-200 bg-white px-4 py-4 items-center",
+        "rounded-2xl border-2 border-agri-primary bg-white px-4 py-4 items-center",
         className,
       )}
     >
-      <Text className="text-zinc-900 font-semibold text-base">{title}</Text>
+      <Text className="text-agri-primary font-semibold text-base">{title}</Text>
     </TouchableOpacity>
   );
 }
@@ -196,8 +189,8 @@ export function TextField({
 }) {
   return (
     <View className="gap-2">
-      <Text className="text-sm font-semibold text-zinc-800">{label}</Text>
-      <View className="flex-row items-center rounded-2xl border border-zinc-200 bg-white px-4">
+      <Text className="text-sm font-semibold text-gray-700">{label}</Text>
+      <View className="flex-row items-center rounded-2xl border border-agri-border bg-white px-4">
         <TextInput
           value={value}
           onChangeText={onChangeText}
@@ -206,7 +199,7 @@ export function TextField({
           secureTextEntry={secureTextEntry}
           keyboardType={keyboardType}
           autoCapitalize={autoCapitalize}
-          className="flex-1 py-4 text-base text-zinc-900"
+          className="flex-1 py-4 text-base text-gray-900"
         />
         {right}
       </View>
@@ -255,26 +248,26 @@ export function AppHeader({
   right?: React.ReactNode;
 }) {
   return (
-    <View className="px-5 pt-2 pb-4 bg-zinc-50">
+    <View className="px-5 pt-2 pb-4 bg-agri-bg">
       <View className="flex-row items-center gap-3">
         {leftIcon ? (
           <TouchableOpacity
             onPress={onLeftPress}
             activeOpacity={0.8}
-            className="h-10 w-10 rounded-2xl bg-white border border-zinc-200 items-center justify-center"
+            className="h-10 w-10 rounded-2xl bg-white border border-agri-border items-center justify-center"
           >
             <MaterialCommunityIcons
               name={leftIcon as any}
               size={22}
-              color="#111827"
+              color="#1E7D3A"
             />
           </TouchableOpacity>
         ) : null}
 
         <View className="flex-1">
-          <Text className="text-zinc-900 text-xl font-extrabold">{title}</Text>
+          <Text className="text-agri-text text-xl font-extrabold">{title}</Text>
           {subtitle ? (
-            <Text className="text-zinc-500 text-sm mt-0.5">{subtitle}</Text>
+            <Text className="text-gray-600 text-sm mt-0.5">{subtitle}</Text>
           ) : null}
         </View>
 
@@ -296,9 +289,16 @@ export function SurfaceCard({
   return (
     <View
       className={cn(
-        "rounded-3xl bg-white border border-zinc-200 shadow-sm",
+        "rounded-3xl bg-white border border-agri-border shadow-sm",
         className,
       )}
+      style={{
+        shadowColor: '#1E7D3A',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.08,
+        shadowRadius: 8,
+        elevation: 2,
+      }}
     >
       {children}
     </View>
@@ -314,7 +314,7 @@ export function SectionTitle({
 }) {
   return (
     <View className="flex-row items-center justify-between px-1">
-      <Text className="text-zinc-900 text-base font-extrabold">{title}</Text>
+      <Text className="text-agri-text text-base font-extrabold">{title}</Text>
       {action ? action : null}
     </View>
   );
@@ -331,10 +331,10 @@ export function SegmentedTabs({
   onChange: (key: string) => void;
   accent?: "brand" | "farmer";
 }) {
-  const activeBg = accent === "farmer" ? "bg-farmer-600" : "bg-brand-600";
+  const activeBg = "bg-agri-primary";
 
   return (
-    <View className="flex-row bg-white border border-zinc-200 rounded-2xl p-1">
+    <View className="flex-row bg-white border border-agri-border rounded-2xl p-1.5">
       {tabs.map((t) => {
         const active = t.key === value;
         return (
@@ -350,7 +350,7 @@ export function SegmentedTabs({
             <Text
               className={cn(
                 "text-center font-semibold",
-                active ? "text-white" : "text-zinc-600",
+                active ? "text-white" : "text-gray-600",
               )}
             >
               {t.label}
@@ -371,12 +371,12 @@ export function EmptyState({
 }) {
   return (
     <View className="items-center justify-center py-16">
-      <View className="h-14 w-14 rounded-3xl bg-brand-50 border border-brand-100 items-center justify-center">
+      <View className="h-14 w-14 rounded-3xl bg-agri-light border border-agri-border items-center justify-center">
         <Text className="text-2xl">🌾</Text>
       </View>
-      <Text className="mt-4 text-zinc-900 font-extrabold">{title}</Text>
+      <Text className="mt-4 text-agri-text font-extrabold">{title}</Text>
       {subtitle ? (
-        <Text className="mt-1 text-zinc-500 text-sm text-center">
+        <Text className="mt-1 text-gray-600 text-sm text-center">
           {subtitle}
         </Text>
       ) : null}
@@ -387,7 +387,7 @@ export function EmptyState({
 export function LoadingState({ label = "Loading…" }: { label?: string }) {
   return (
     <View className="py-16 items-center justify-center">
-      <Text className="text-zinc-500 text-sm">{label}</Text>
+      <Text className="text-gray-600 text-sm">{label}</Text>
     </View>
   );
 }
@@ -435,7 +435,7 @@ export function StatBadge({
 }) {
   const bgColor =
     color === "brand"
-      ? "bg-brand-100"
+      ? "bg-agri-light"
       : color === "farmer"
         ? "bg-farmer-100"
         : color === "blue"
@@ -445,7 +445,7 @@ export function StatBadge({
             : "bg-orange-100";
   const iconColor =
     color === "brand"
-      ? "#059669"
+      ? "#1E7D3A"
       : color === "farmer"
         ? "#EA580C"
         : color === "blue"
@@ -465,8 +465,8 @@ export function StatBadge({
           color={iconColor}
         />
       </View>
-      <Text className="text-zinc-900 font-extrabold text-lg">{value}</Text>
-      <Text className="text-zinc-500 text-xs">{label}</Text>
+      <Text className="text-agri-text font-extrabold text-lg">{value}</Text>
+      <Text className="text-gray-600 text-xs">{label}</Text>
     </View>
   );
 }
@@ -508,9 +508,16 @@ export function ModernCard({
       onPress={onPress}
       activeOpacity={onPress ? 0.9 : 1}
       className={cn(
-        "bg-white rounded-3xl shadow-md border border-zinc-100",
+        "bg-white rounded-3xl border border-agri-border",
         className,
       )}
+      style={{
+        shadowColor: '#1E7D3A',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+        elevation: 3,
+      }}
     >
       {children}
     </Wrapper>
@@ -549,22 +556,22 @@ export function AvatarListItem({
     <TouchableOpacity
       activeOpacity={0.9}
       onPress={onPress}
-      className="flex-row items-center gap-3 bg-white rounded-2xl p-4 border border-zinc-100"
+      className="flex-row items-center gap-3 bg-white rounded-2xl p-4 border border-agri-border"
     >
-      <View className="h-12 w-12 rounded-full bg-brand-100 items-center justify-center overflow-hidden">
+      <View className="h-12 w-12 rounded-full bg-agri-light items-center justify-center overflow-hidden">
         {avatarUrl ? (
-          <Text className="text-brand-700 font-bold text-lg">
+          <Text className="text-agri-primary font-bold text-lg">
             {name.charAt(0).toUpperCase()}
           </Text>
         ) : (
-          <MaterialCommunityIcons name="account" size={24} color="#059669" />
+          <MaterialCommunityIcons name="account" size={24} color="#1E7D3A" />
         )}
       </View>
 
       <View className="flex-1">
-        <Text className="text-zinc-900 font-bold">{name}</Text>
+        <Text className="text-agri-text font-bold">{name}</Text>
         {subtitle ? (
-          <Text className="text-zinc-500 text-xs mt-0.5">{subtitle}</Text>
+          <Text className="text-gray-600 text-xs mt-0.5">{subtitle}</Text>
         ) : null}
         {badge ? (
           <View className="mt-1">
@@ -575,15 +582,15 @@ export function AvatarListItem({
 
       <View className="items-end">
         {amount ? (
-          <Text className="text-zinc-900 font-bold">{amount}</Text>
+          <Text className="text-agri-text font-bold">{amount}</Text>
         ) : null}
         {date ? (
-          <Text className="text-zinc-400 text-xs mt-0.5">{date}</Text>
+          <Text className="text-gray-500 text-xs mt-0.5">{date}</Text>
         ) : null}
         <MaterialCommunityIcons
           name="chevron-right"
           size={20}
-          color="#9CA3AF"
+          color="#1E7D3A"
         />
       </View>
     </TouchableOpacity>

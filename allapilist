@@ -1,0 +1,207 @@
+✅ ✅ COMPLETE CORRECT API LIST – MandiConnect
+🔐 AUTHENTICATION – FARMER
+1️⃣ Farmer Signup
+POST /farmer/signup
+
+
+Body:
+
+{
+  "name": "Sejal Shinde",
+  "mobile": "9876514522",
+  "email": "sejalshinde6552@gmail.com",
+  "password": "12345",
+  "farmerAddress": {
+    "city": "Sangamner",
+    "state": "Maharashtra",
+    "country": "India"
+  },
+  "farmDetails": {
+    "farmSize": "2 acres",
+    "cropIds": ["CROP_ID"],
+    "preferredMarketIds": ["MARKET_ID"],
+    "irrigationType": "Drip",
+    "soilType": "Black"
+  }
+}
+
+2️⃣ Verify Farmer
+GET /farmer/verify?token=TOKEN
+
+3️⃣ Farmer Login
+POST /farmer/login
+
+{
+  "email": "sejalshinde6552@gmail.com",
+  "password": "12345"
+}
+
+4️⃣ Get All Farmers
+GET /farmer/getFarmers
+
+5️⃣ Get Farmer By ID
+GET /farmer/{farmerId}
+
+6️⃣ Update Farmer
+PATCH /farmer/update/{farmerId}
+
+
+Headers:
+
+Authorization: Bearer TOKEN
+Content-Type: application/json
+
+7️⃣ Delete Farmer
+DELETE /farmer/delete/{farmerId}
+
+
+Headers:
+
+Authorization: Bearer TOKEN
+
+8️⃣ Forgot Password
+POST /farmer/forgot-password
+
+9️⃣ Reset Password
+POST /farmer/reset-password?token=TOKEN
+
+🔐 AUTHENTICATION – BUYER
+1️⃣ Buyer Signup
+POST /buyer/signup
+
+2️⃣ Buyer Login
+POST /buyer/login
+
+3️⃣ Verify Buyer
+GET /buyer/verify?token=TOKEN
+
+4️⃣ Get All Buyers
+GET /buyer/getAll
+
+5️⃣ Get Buyer By ID
+GET /buyer/{buyerId}
+
+6️⃣ Update Buyer
+PATCH /buyer/update/{buyerId}
+
+
+Headers:
+
+Authorization: Bearer TOKEN
+
+7️⃣ Delete Buyer
+DELETE /buyer/delete/{buyerId}
+
+8️⃣ Forgot Password
+POST /buyer/forgot-password
+
+9️⃣ Reset Password
+POST /buyer/reset-password?token=TOKEN
+
+🌾 COMMON APIs
+➕ Add Market
+POST /addMarket
+
+📥 Get All Markets
+GET /getAllMarket
+
+➕ Add Crop
+POST /addCrop
+
+📥 Get All Crops
+GET /getAllCrop
+
+💰 FARMER PRICE ENTRIES
+➕ Add Price Entry
+POST /farmer-entries/add
+
+
+Headers:
+
+Authorization: Bearer TOKEN
+
+📥 Get All Price Entries
+GET /farmer-entries/getAllEntries
+
+📥 Get By Crop & Market
+GET /farmer-entries/getByCropAndMarket/{cropId}/{marketId}
+
+📥 Get By Farmer ID
+GET /farmer-entries/getByFarmerId/{farmerId}
+
+👍 Agree Price
+POST /farmer-entries/agree/{entryId}/{farmerId}
+
+👎 Disagree Price
+POST /farmer-entries/disagree/{entryId}/{farmerId}
+
+📊 Get Agree Count
+GET /farmer-entries/agree-count/{entryId}
+
+📊 Get Disagree Count
+GET /farmer-entries/disagree-count/{entryId}
+
+📈 PRICE MARKET STATS
+📊 By Crop & Market
+GET /stats/getByCropIdAndMarketid/{cropId}/{marketId}
+
+📊 By Market
+GET /stats/getByMarket/{marketId}
+
+📊 By Crop
+GET /stats/getByCrop/{cropId}
+
+🛒 MARKETPLACE – FARMER SIDE
+📤 Upload Image
+POST /marketplace/farmer/upload
+
+
+(form-data)
+
+❌ Delete Image
+DELETE /marketplace/farmer/delete?public_id=PUBLIC_ID
+
+➕ Create Crop Listing
+POST /marketplace/farmer/cropListing
+
+📥 Get All Listings
+GET /marketplace/farmer/getAllListing
+
+🛒 MARKETPLACE – BUYER SIDE
+➕ Add Demand
+POST /marketplace/buyer/add
+
+📥 Get All Demands
+GET /marketplace/buyer/all
+
+📥 Get Demands By Buyer
+GET /marketplace/buyer/buyer/{buyerId}
+
+📥 Get Demands By Status
+GET /marketplace/buyer/status/{status}
+
+✏ Update Demand Status
+PATCH /marketplace/buyer/updateStatus/{demandId}
+
+❌ Delete Demand
+DELETE /marketplace/buyer/delete/{demandId}
+
+🔔 NOTIFICATIONS
+📥 Get Notifications
+GET /notifications/user/{userId}
+
+🤝 CONNECTION REQUESTS
+📥 Get Incoming
+GET /connections/incoming/{userId}
+
+📤 Send Request
+POST /connections/send
+
+✅ Accept
+POST /connections/accept/{requestId}
+
+❌ Reject
+POST /connections/reject/{requestId}
+
+📤 Get Sent Requests
+GET /connections/sent/{userId}

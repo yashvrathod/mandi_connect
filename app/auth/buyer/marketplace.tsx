@@ -1,11 +1,14 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import axios from "axios";
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useState } from "react";
 import { Alert, FlatList, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useAuth } from "../../../context/AuthContext";
+import { commonAPI, buyerMarketplaceAPI, farmerMarketplaceAPI, connectionAPI } from "../../../services/api";
+import { extractUserId, buildConnectionRequest } from "@/utils/apiHelpers";
+import { handleApiError } from "@/utils/errorHandler";
+import logger from "@/utils/logger";
 import {
   AnimatedIn,
   EmptyState,
@@ -14,8 +17,6 @@ import {
   PillBadge,
   SegmentedTabs,
 } from "../../ui/components";
-
-const BASE_URL = "https://mandiconnect.onrender.com";
 const FALLBACK_IMAGE =
   "https://images.unsplash.com/photo-1567306226416-28f0efdc88ce";
 
@@ -23,12 +24,15 @@ const FALLBACK_IMAGE =
 
 type FarmerListing = {
   id?: string;
+  farmerId?: string;
+  FarmerId?: string;
   price?: number;
   quantity?: number;
   unit?: string;
   photoUrl?: string;
   crop?: { name?: string };
   location?: { village?: string; city?: string };
+  [key: string]: any;
 };
 
 type DemandStatus = "active" | "fulfilled" | "cancelled";
@@ -52,6 +56,7 @@ type Crop = {
 
 export default function Marketplace() {
   const router = useRouter();
+  const { user, logout } = useAuth();
 
   const [activeTab, setActiveTab] = useState<"farmer" | "buyer">("farmer");
   const [demandStatus, setDemandStatus] = useState<DemandStatus>("active");
@@ -67,56 +72,49 @@ export default function Marketplace() {
     null,
   );
   const [showModal, setShowModal] = useState(false);
-
-  /* ---------- AUTH ---------- */
-  const getHeaders = async () => {
-    const token = await AsyncStorage.getItem("token");
-    return { Authorization: `Bearer ${token}` };
-  };
+  const [connectRequested, setConnectRequested] = useState(false);
 
   /* ---------- LOAD COMMON DATA ---------- */
   const loadCommonData = async () => {
-    const headers = await getHeaders();
+    try {
+      const cropRes = await commonAPI.getAllCrops();
+      const map: Record<string, string> = {};
+      cropRes.data.forEach((c: Crop) => {
+        const id = c.id || c._id;
+        if (id) map[id] = c.name;
+      });
+      setCropMap(map);
 
-    const cropRes = await axios.get(`${BASE_URL}/getAllCrop`, { headers });
-    const map: Record<string, string> = {};
-    cropRes.data.forEach((c: Crop) => {
-      const id = c.id || c._id;
-      if (id) map[id] = c.name;
-    });
-    setCropMap(map);
+      const farmerRes = await farmerMarketplaceAPI.getAllListings();
 
-    const farmerRes = await axios.get(
-      `${BASE_URL}/marketplace/farmer/getAllListing`,
-      { headers },
-    );
-
-    setFarmerListings(
-      Array.isArray(farmerRes.data)
-        ? farmerRes.data.filter((i) => i.status === "active")
-        : [],
-    );
+      setFarmerListings(
+        Array.isArray(farmerRes.data)
+          ? farmerRes.data.filter((i) => i.status === "active")
+          : [],
+      );
+    } catch (error: any) {
+      if (error.response?.status === 401) await logout();
+    }
   };
 
   /* ---------- LOAD DEMANDS ---------- */
   const loadBuyerDemands = async (status: DemandStatus) => {
-    const headers = await getHeaders();
+    try {
+      const res = await buyerMarketplaceAPI.getDemandsByStatus(status);
 
-    const res = await axios.get(
-      `${BASE_URL}/marketplace/buyer/status/${status}`,
-      { headers },
-    );
+      const mapped: BuyerDemand[] = res.data.map((d: any) => ({
+        id: d.id,
+        cropId: d.CropId,
+        quantity: d.RequiredQuantity?.Value ?? 0,
+        unit: d.RequiredQuantity?.Unit ?? "",
+        price: d.ExpectedPrice?.Value ?? 0,
+        status: d.Status.toLowerCase(),
+      }));
 
-    const mapped: BuyerDemand[] = res.data.map((d: any) => ({
-      id: d.id,
-      cropId: d.CropId,
-      quantity: d.RequiredQuantity?.Value ?? 0,
-      unit: d.RequiredQuantity?.Unit ?? "",
-      price: d.ExpectedPrice?.Value ?? 0,
-      status: d.Status.toLowerCase(),
-    }));
-
-    setBuyerDemands(mapped);
+      setBuyerDemands(mapped);
+    } catch (error: any) {
+      if (error.response?.status === 401) await logout();
+    }
   };
 
   /* ---------- CANCEL DEMAND ---------- */
@@ -130,17 +128,72 @@ export default function Marketplace() {
           text: "Yes",
           style: "destructive",
           onPress: async () => {
-            const headers = await getHeaders();
-            await axios.put(
-              `${BASE_URL}/marketplace/buyer/cancel/${id}`,
-              {},
-              { headers },
-            );
-            loadBuyerDemands(demandStatus);
+            try {
+              await buyerMarketplaceAPI.updateDemandStatus(id, { Status: "cancelled" });
+              loadBuyerDemands(demandStatus);
+            } catch (error: any) {
+              if (error.response?.status === 401) await logout();
+              Alert.alert("Error", "Failed to cancel demand");
+            }
           },
         },
       ],
     );
+  };
+
+  /* ---------- CONNECT TO FARMER ---------- */
+  const connectToFarmer = async () => {
+    if (!selectedListing?.id) {
+      logger.warn("Connect attempt with missing listing ID");
+      Alert.alert("Error", "Missing listing information");
+      return;
+    }
+
+    if (!user?.id) {
+      logger.warn("Connect attempt without user login");
+      Alert.alert("Error", "You must be logged in to send connection requests");
+      return;
+    }
+
+    // Extract farmer ID using helper
+    const farmerId = extractUserId(selectedListing, 'farmer');
+
+    if (!farmerId) {
+      logger.warn("Missing farmer ID from listing", { 
+        listingId: selectedListing.id,
+        availableFields: Object.keys(selectedListing)
+      });
+      Alert.alert(
+        "Error", 
+        "Cannot connect: Farmer information not available. Please contact support if this issue persists."
+      );
+      return;
+    }
+
+    try {
+      const payload = buildConnectionRequest(
+        farmerId,
+        'farmer',
+        'listing',
+        selectedListing.id,
+        `I'm interested in your ${selectedListing.crop?.name || 'crop'} listing.`
+      );
+      
+      logger.info('Sending connection request', { 
+        recipientId: farmerId,
+        listingId: selectedListing.id 
+      });
+      
+      await connectionAPI.sendRequest(payload);
+
+      setConnectRequested(true);
+      Alert.alert("Success", "Connection request sent to farmer!");
+      logger.info('Connection request sent successfully');
+    } catch (err: any) {
+      logger.error("Failed to send connection request", err);
+      const errorMsg = handleApiError(err, 'Sending connection request');
+      Alert.alert("Error", errorMsg);
+    }
   };
 
   /* ---------- EFFECTS ---------- */
@@ -231,6 +284,7 @@ export default function Marketplace() {
               <TouchableOpacity
                 activeOpacity={0.95}
                 onPress={() => {
+                  setConnectRequested(false);
                   setSelectedListing(item);
                   setShowModal(true);
                 }}
@@ -459,10 +513,22 @@ export default function Marketplace() {
                 {/* Actions */}
                 <TouchableOpacity
                   activeOpacity={0.9}
-                  className="bg-brand-600 rounded-2xl py-4 items-center mb-3"
+                  onPress={connectToFarmer}
+                  disabled={connectRequested}
+                  className={
+                    (connectRequested
+                      ? "bg-gray-200"
+                      : "bg-brand-600") +
+                    " rounded-2xl py-4 items-center mb-3"
+                  }
                 >
-                  <Text className="text-white font-extrabold">
-                    Contact Farmer
+                  <Text
+                    className={
+                      (connectRequested ? "text-gray-600" : "text-white") +
+                      " font-extrabold"
+                    }
+                  >
+                    {connectRequested ? "Request Sent" : "Contact Farmer"}
                   </Text>
                 </TouchableOpacity>
 

@@ -1,0 +1,216 @@
+🔐 AUTHENTICATION APIs
+Farmer
+
+POST /Farmer-signup
+GET /Farmer-verify
+POST /Farmer-login
+PATCH /Farmer-Update
+DELETE /Farmer-delete
+POST /Forgot-Password
+GET /Reset-Password
+POST /Reset-Password
+GET /getAllFarmer
+GET /getFarmerById
+
+Buyer
+
+POST /Buyer-SignUp
+POST /Buyer-Login
+GET /getAllBuyer
+GET /getBuyerByID
+
+🌾 COMMON APIs
+
+POST /Add-Market
+GET /get-all-market
+
+POST /Add-Crop
+GET /get-all-crops
+
+💰 FARMER PRICE FEATURES
+
+POST /Add-farmer-Price-Entry
+GET /Get-All-Price-Entries
+GET /Get-Price-entries-by-cropid-and-marketid
+GET /Get-Price-Entry-by-Farmer-ID
+
+POST /price-agree
+POST /price-disagree
+
+GET /get-agree-count
+GET /get-disagree-count
+
+📊 PRICE MARKET STATS
+
+GET /getByCropIdAndMarketid
+GET /Get-Stats-By-Market
+GET /Get-Stats-By-Crop
+
+🛒 MARKETPLACE – FARMER SIDE
+
+POST /Upload-File-API
+DELETE /Delete-File-API
+
+POST /cropListing
+GET /Get-All-Listing
+
+🛍 MARKETPLACE – BUYER SIDE
+
+POST /Buyer-add-Demand
+GET /Buyer-get-all-Demands
+PATCH /Buyer-Update-Demand
+GET /Demand-by-Buyer-Id
+DELETE /Buyer-Delete-Demand
+GET /Demands-by-Status
+
+🔔 NOTIFICATIONS
+
+GET /GetNotificationsById
+
+🤝 CONNECTION REQUEST SYSTEM
+
+GET /Get-All-Connection-Request
+POST /CreateConnections
+POST /Accept-Connection-Request
+POST /Reject-Connection-Request
+GET /Get-My-Sent-Requests
+
+📱 FEATURES THAT MUST BE IMPLEMENTED
+
+Implement all of the following screens and connect to APIs:
+
+1️⃣ Authentication Flow
+
+Role selection (Farmer / Buyer)
+
+Signup screen
+
+Login screen
+
+Forgot password
+
+Reset password
+
+Email verification
+
+Persistent login with token
+
+Logout
+
+2️⃣ Farmer Dashboard
+
+Add crop price
+
+View own price entries
+
+See agree/disagree count
+
+Upload crop listing with image
+
+Delete listing image
+
+Manage profile
+
+View notifications
+
+See price analytics charts
+
+3️⃣ Buyer Dashboard
+
+Browse crop listings
+
+Filter by crop
+
+Filter by market
+
+Post demand
+
+Update demand
+
+Delete demand
+
+Track demand status
+
+View notifications
+
+4️⃣ Marketplace Features
+
+View all listings
+
+View listing details page
+
+Show farmer info
+
+Send connection request
+
+Accept/reject connection request
+
+5️⃣ Analytics Section
+
+Show average price by crop
+
+Show stats by market
+
+Show price trends chart (use chart library)
+
+6️⃣ Social System
+
+View sent connection requests
+
+View received requests
+
+Accept/Reject
+
+Show connected users list
+
+7️⃣ Notifications Center
+
+Display notification list
+
+Pull to refresh
+
+🧱 STRUCTURE REQUIREMENTS
+
+Create:
+
+services/api.js (Axios instance)
+
+context/AuthContext.js
+
+reusable components (Button, Input, Card)
+
+screens separated by role
+
+loading states
+
+empty states
+
+error messages
+
+🎨 UI REQUIREMENTS
+
+Soft green theme
+
+Rounded cards
+
+20px border radius
+
+Clean spacing
+
+Modern typography
+
+Professional startup look
+
+🧠 IMPORTANT
+
+If something is missing:
+
+Infer correct parameters
+
+Create placeholder structure
+
+Add TODO comments where backend clarification needed
+
+Do NOT leave any feature unimplemented.
+
+Generate complete working code structure.

@@ -1,6 +1,5 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import axios from "axios";
+import { useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import {
   FlatList,
@@ -14,9 +13,9 @@ import {
   SafeAreaView,
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
-import { AnimatedIn, ModernCard, PillBadge, StatBadge } from "../../ui/components";
-
-const BASE_URL = "https://mandiconnect.onrender.com";
+import { useAuth } from "../../../context/AuthContext";
+import { commonAPI, statsAPI, priceAPI } from "../../../services/api";
+import { AnimatedIn, ModernCard, PillBadge, StatBadge, LoadingState, EmptyState } from "../../ui/components";
 
 /* ================= TYPES ================= */
 
@@ -52,7 +51,9 @@ type CropStats = {
 /* ================= COMPONENT ================= */
 
 export default function BuyerHome() {
+  const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { logout } = useAuth();
 
   const [crops, setCrops] = useState<Crop[]>([]);
   const [stats, setStats] = useState<CropStats[]>([]);
@@ -62,37 +63,64 @@ export default function BuyerHome() {
   const [refreshing, setRefreshing] = useState(false);
   const [marketId, setMarketId] = useState<string | null>(null);
 
-  const getHeaders = async () => {
-    const token = await AsyncStorage.getItem("token");
-    return { Authorization: `Bearer ${token}` };
-  };
-
   const loadCrops = async () => {
-    const res = await axios.get(`${BASE_URL}/getAllCrop`, {
-      headers: await getHeaders(),
-    });
-    setCrops(res.data);
+    try {
+      const res = await commonAPI.getAllCrops();
+      setCrops(res.data);
+    } catch (error: any) {
+      console.error("Error loading crops:", error);
+      if (error.response?.status === 401) {
+        await logout();
+      }
+    }
   };
 
   const loadMarket = async () => {
-    const res = await axios.get(`${BASE_URL}/getAllMarket`, {
-      headers: await getHeaders(),
-    });
-    setMarketId(res.data[0]?.id ?? null);
+    try {
+      const res = await commonAPI.getAllMarkets();
+      setMarketId(res.data[0]?.id ?? null);
+    } catch (error: any) {
+      console.error("Error loading markets:", error);
+      if (error.response?.status === 401) {
+        await logout();
+      }
+    }
   };
 
   const loadPrices = async (mId: string) => {
-    const headers = await getHeaders();
-    const requests = crops.map((crop) =>
-      axios
-        .get(`${BASE_URL}/stats/getByCropIdAndMarketid/${crop.id}/${mId}`, {
-          headers,
-        })
-        .then((res) => res.data)
-        .catch(() => null),
-    );
-    const results = await Promise.all(requests);
-    setStats(results.filter(Boolean));
+    try {
+      // Try to get price entries instead of stats
+      const res = await priceAPI.getAllPriceEntries();
+      const entries = Array.isArray(res.data) ? res.data : res.data.data || [];
+      
+      // Transform price entries into stats format
+      const statsData = entries.map((entry: any) => ({
+        crop: {
+          id: entry.crop?.id || entry.crop?._id || "",
+          name: entry.crop?.name || entry.cropName || "Unknown",
+          displayUnit: entry.crop?.displayUnit || entry.quantity || "kg",
+        },
+        mandi: {
+          id: entry.market?.id || entry.market?._id || "",
+          marketName: entry.market?.marketName || entry.market?.name || entry.marketName || "Unknown Market",
+        },
+        dailyStats: {
+          averagePrice: entry.price || entry.rate || 0,
+          minPrice: entry.price || entry.rate || 0,
+          maxPrice: entry.price || entry.rate || 0,
+          lastUpdated: entry.createdAt || new Date().toISOString(),
+          isStale: false,
+        },
+        trend: [],
+      }));
+      
+      setStats(statsData);
+    } catch (error: any) {
+      console.error("Error loading prices:", error);
+      if (error.response?.status === 401) {
+        await logout();
+      }
+    }
   };
 
   useEffect(() => {
@@ -244,9 +272,19 @@ export default function BuyerHome() {
     <SafeAreaView className="flex-1 bg-gray-50">
       {/* Header with Stats */}
       <View className="px-5 pt-5 pb-4 bg-white border-b border-gray-100">
-        <Text className="text-zinc-900 text-3xl font-extrabold mb-2">
-          Market Dashboard
-        </Text>
+        <View className="flex-row items-center justify-between mb-2">
+          <Text className="text-zinc-900 text-3xl font-extrabold flex-1">
+            Market Dashboard
+          </Text>
+          <View className="flex-row gap-3">
+            <TouchableOpacity
+              onPress={() => router.push("/auth/buyer/connections")}
+              className="h-11 w-11 rounded-xl bg-brand-100 items-center justify-center"
+            >
+              <MaterialCommunityIcons name="account-group" size={22} color="#059669" />
+            </TouchableOpacity>
+          </View>
+        </View>
         <Text className="text-zinc-500 mb-6">Live crop prices from mandis</Text>
 
         {/* Stat Circles Row */}
@@ -286,15 +324,25 @@ export default function BuyerHome() {
       </View>
 
       {/* List */}
-      <FlatList
-        data={filteredStats}
-        renderItem={renderItem}
-        keyExtractor={(item) => item.crop.id}
-        refreshing={refreshing}
-        onRefresh={onRefresh}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: insets.bottom + 30 }}
-      />
+      {loading ? (
+        <LoadingState label="Loading crop prices..." />
+      ) : (
+        <FlatList
+          data={filteredStats}
+          renderItem={renderItem}
+          keyExtractor={(item) => item.crop.id}
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: insets.bottom + 30 }}
+          ListEmptyComponent={
+            <EmptyState
+              title="No crop prices available"
+              subtitle="Farmers haven't posted any prices yet. Check back later!"
+            />
+          }
+        />
+      )}
     </SafeAreaView>
   );
 }

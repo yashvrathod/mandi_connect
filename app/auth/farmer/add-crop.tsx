@@ -1,6 +1,4 @@
-import { MaterialCommunityIcons } from "@expo/vector-icons";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import axios from "axios";
+import { MaterialCommunityIcons, Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
@@ -17,19 +15,18 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-  useWindowDimensions,
+  KeyboardAvoidingView,
 } from "react-native";
 import {
   SafeAreaView,
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
+import { useAuth } from "../../../context/AuthContext";
+import { commonAPI, priceAPI } from "../../../services/api";
 
 /* ---------- TYPES ---------- */
 type Crop = { id: string; name: string; type: string; variety?: string };
 type Market = { id: string; marketName: string };
-
-/* ---------- CONFIG ---------- */
-const BASE_URL = "https://mandiconnect.onrender.com";
 
 /* ---------- ALERT ---------- */
 const showAlert = (title: string, message: string) => {
@@ -41,7 +38,7 @@ const showAlert = (title: string, message: string) => {
 export default function AddFarmerEntry() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
+  const { logout } = useAuth();
 
   /* ---------- STATE ---------- */
   const [crops, setCrops] = useState<Crop[]>([]);
@@ -74,16 +71,9 @@ export default function AddFarmerEntry() {
 
   const fetchCropsAndMarkets = async () => {
     try {
-      const token = await AsyncStorage.getItem("token");
-      if (!token) return;
-
       const [cropRes, marketRes] = await Promise.all([
-        axios.get(`${BASE_URL}/getAllCrop`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-        axios.get(`${BASE_URL}/getAllMarket`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
+        commonAPI.getAllCrops(),
+        commonAPI.getAllMarkets(),
       ]);
 
       setCrops(
@@ -126,12 +116,11 @@ export default function AddFarmerEntry() {
       return showAlert("Missing", "Fill all fields");
 
     try {
-      const token = await AsyncStorage.getItem("token");
-      const res = await axios.post(
-        `${BASE_URL}/addCrop`,
-        { name: newCropName, type: newCropType, variety: newCropVariety },
-        { headers: { Authorization: `Bearer ${token}` } },
-      );
+      const res = await commonAPI.addCrop({
+        name: newCropName,
+        type: newCropType,
+        variety: newCropVariety,
+      });
 
       const crop = {
         id: res.data._id || res.data.id,
@@ -146,7 +135,8 @@ export default function AddFarmerEntry() {
       setNewCropName("");
       setNewCropType("");
       setNewCropVariety("");
-    } catch {
+    } catch (error: any) {
+      if (error.response?.status === 401) await logout();
       showAlert("Error", "Failed to add crop");
     }
   };
@@ -157,19 +147,14 @@ export default function AddFarmerEntry() {
       return showAlert("Missing", "Fill all fields");
 
     try {
-      const token = await AsyncStorage.getItem("token");
-      const res = await axios.post(
-        `${BASE_URL}/addMarket`,
-        {
-          marketName: newMarketName,
-          marketAddress: {
-            city: marketCity,
-            state: marketState,
-            country: marketCountry,
-          },
+      const res = await commonAPI.addMarket({
+        marketName: newMarketName,
+        marketAddress: {
+          city: marketCity,
+          state: marketState,
+          country: marketCountry,
         },
-        { headers: { Authorization: `Bearer ${token}` } },
-      );
+      });
 
       const market = {
         id: res.data._id || res.data.id,
@@ -195,11 +180,8 @@ export default function AddFarmerEntry() {
 
     try {
       setLoading(true);
-      const token = await AsyncStorage.getItem("token");
-      const farmerId = await AsyncStorage.getItem("farmerId");
 
       const payload = {
-        farmer: { id: farmerId },
         crop: { id: selectedCrop.id },
         market: { id: selectedMarket.id },
         price: Number(price),
@@ -208,14 +190,17 @@ export default function AddFarmerEntry() {
         createdAt: new Date().toISOString(),
       };
 
-      await axios.post(`${BASE_URL}/farmer-entries/add`, payload, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      await priceAPI.addPriceEntry(payload);
 
       showAlert("Success", "Entry added successfully");
       router.replace("/auth/farmer/farmer-dashboard");
-    } catch {
-      showAlert("Error", "Failed to submit entry");
+    } catch (error: any) {
+      if (error.response?.status === 401) {
+        await logout();
+        router.replace("/auth/farmerlogin");
+      } else {
+        showAlert("Error", "Failed to submit entry");
+      }
     } finally {
       setLoading(false);
     }
@@ -226,183 +211,402 @@ export default function AddFarmerEntry() {
     <SafeAreaView style={styles.safe}>
       <StatusBar style="dark" />
 
-      <ScrollView
-        contentContainerStyle={[
-          styles.scroll,
-          { paddingBottom: insets.bottom + 40 },
-        ]}
-      >
-        {/* HEADER */}
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()}>
-            <MaterialCommunityIcons
-              name="arrow-left"
-              size={26}
-              color="#2E7D32"
-            />
-          </TouchableOpacity>
-          <Text style={styles.title}>🌾 Add Crop Entry</Text>
-        </View>
-
-        {/* CROP */}
-        <View style={styles.labelRow}>
-          <Text style={styles.label}>Crop</Text>
-          <TouchableOpacity onPress={() => setShowCropModal(true)}>
-            <Text style={styles.addText}>+ Add Crop</Text>
-          </TouchableOpacity>
-        </View>
-
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          {crops.map((c) => (
-            <TouchableOpacity
-              key={c.id}
-              onPress={() => setSelectedCrop(c)}
-              style={[
-                styles.chip,
-                selectedCrop?.id === c.id && styles.chipActive,
-              ]}
-            >
-              <Text>{c.name}</Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-
-        {/* MARKET */}
-        <View style={styles.labelRow}>
-          <Text style={styles.label}>Market</Text>
-          <TouchableOpacity onPress={() => setShowMarketModal(true)}>
-            <Text style={styles.addText}>+Add Market</Text>
-          </TouchableOpacity>
-        </View>
-
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          {markets.map((m) => (
-            <TouchableOpacity
-              key={m.id}
-              onPress={() => setSelectedMarket(m)}
-              style={[
-                styles.chip,
-                selectedMarket?.id === m.id && styles.chipActive,
-              ]}
-            >
-              <Text>{m.marketName}</Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-
-        {/* INPUTS */}
-        <Text style={styles.label}>Price (₹)</Text>
-        <TextInput
-          style={styles.input}
-          keyboardType="numeric"
-          value={price}
-          onChangeText={setPrice}
-        />
-
-        <Text style={styles.label}>Quantity (kg)</Text>
-        <TextInput
-          style={styles.input}
-          keyboardType="numeric"
-          value={quantity}
-          onChangeText={setQuantity}
-        />
-
-        <TouchableOpacity onPress={pickImage} style={styles.photoBtn}>
-          <Text>{photo ? "Change Photo" : "Upload Photo (optional)"}</Text>
-        </TouchableOpacity>
-
-        {photo && <Image source={{ uri: photo }} style={styles.image} />}
-
-        <TouchableOpacity
-          style={styles.submit}
-          onPress={handleSubmit}
-          disabled={loading}
+      {/* HEADER */}
+      <View style={styles.header}>
+        <TouchableOpacity 
+          onPress={() => router.back()}
+          style={styles.backButton}
         >
-          {loading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.submitText}>Add Entry</Text>
-          )}
+          <Ionicons name="arrow-back" size={24} color="#1F2937" />
         </TouchableOpacity>
-      </ScrollView>
+        <Text style={styles.title}>Add Price Entry</Text>
+        <View style={{ width: 40 }} />
+      </View>
 
-      {/* ---------- CROP MODAL ---------- */}
-      <Modal visible={showCropModal} transparent animationType="fade">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Add Crop</Text>
-              <TouchableOpacity onPress={() => setShowCropModal(false)}>
-                <MaterialCommunityIcons name="close" size={24} />
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={{ flex: 1 }}
+      >
+        <ScrollView
+          contentContainerStyle={[
+            styles.scroll,
+            { paddingBottom: insets.bottom + 40 },
+          ]}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* INFO CARD */}
+          <View style={styles.infoCard}>
+            <Ionicons name="information-circle" size={20} color="#2563EB" />
+            <Text style={styles.infoText}>
+              Share your crop prices to help farmers get better market insights
+            </Text>
+          </View>
+
+          {/* CROP SELECTION */}
+          <View style={styles.section}>
+            <View style={styles.labelRow}>
+              <Text style={styles.sectionLabel}>Select Crop</Text>
+              <TouchableOpacity 
+                onPress={() => setShowCropModal(true)}
+                style={styles.addButton}
+              >
+                <Ionicons name="add-circle" size={18} color="#2E7D32" />
+                <Text style={styles.addText}>Add New</Text>
               </TouchableOpacity>
             </View>
 
-            <TextInput
-              placeholder="Name"
-              style={styles.input}
-              value={newCropName}
-              onChangeText={setNewCropName}
-            />
-            <TextInput
-              placeholder="Type"
-              style={styles.input}
-              value={newCropType}
-              onChangeText={setNewCropType}
-            />
-            <TextInput
-              placeholder="Variety"
-              style={styles.input}
-              value={newCropVariety}
-              onChangeText={setNewCropVariety}
-            />
-
-            <TouchableOpacity style={styles.submit} onPress={handleAddCrop}>
-              <Text style={styles.submitText}>Save Crop</Text>
-            </TouchableOpacity>
+            {crops.length > 0 ? (
+              <ScrollView 
+                horizontal 
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.chipsContainer}
+              >
+                {crops.map((c) => (
+                  <TouchableOpacity
+                    key={c.id}
+                    onPress={() => setSelectedCrop(c)}
+                    style={[
+                      styles.chip,
+                      selectedCrop?.id === c.id && styles.chipActive,
+                    ]}
+                  >
+                    <Ionicons 
+                      name={selectedCrop?.id === c.id ? "checkmark-circle" : "leaf-outline"} 
+                      size={16} 
+                      color={selectedCrop?.id === c.id ? "#fff" : "#2E7D32"} 
+                    />
+                    <Text style={[
+                      styles.chipText,
+                      selectedCrop?.id === c.id && styles.chipTextActive
+                    ]}>
+                      {c.name}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            ) : (
+              <View style={styles.emptyState}>
+                <Ionicons name="leaf-outline" size={32} color="#9CA3AF" />
+                <Text style={styles.emptyText}>No crops available. Add one!</Text>
+              </View>
+            )}
           </View>
+
+          {/* MARKET SELECTION */}
+          <View style={styles.section}>
+            <View style={styles.labelRow}>
+              <Text style={styles.sectionLabel}>Select Market</Text>
+              <TouchableOpacity 
+                onPress={() => setShowMarketModal(true)}
+                style={styles.addButton}
+              >
+                <Ionicons name="add-circle" size={18} color="#2E7D32" />
+                <Text style={styles.addText}>Add New</Text>
+              </TouchableOpacity>
+            </View>
+
+            {markets.length > 0 ? (
+              <ScrollView 
+                horizontal 
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.chipsContainer}
+              >
+                {markets.map((m) => (
+                  <TouchableOpacity
+                    key={m.id}
+                    onPress={() => setSelectedMarket(m)}
+                    style={[
+                      styles.chip,
+                      selectedMarket?.id === m.id && styles.chipActive,
+                    ]}
+                  >
+                    <Ionicons 
+                      name={selectedMarket?.id === m.id ? "checkmark-circle" : "location-outline"} 
+                      size={16} 
+                      color={selectedMarket?.id === m.id ? "#fff" : "#2E7D32"} 
+                    />
+                    <Text style={[
+                      styles.chipText,
+                      selectedMarket?.id === m.id && styles.chipTextActive
+                    ]}>
+                      {m.marketName}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            ) : (
+              <View style={styles.emptyState}>
+                <Ionicons name="location-outline" size={32} color="#9CA3AF" />
+                <Text style={styles.emptyText}>No markets available. Add one!</Text>
+              </View>
+            )}
+          </View>
+
+          {/* PRICE & QUANTITY */}
+          <View style={styles.section}>
+            <Text style={styles.sectionLabel}>Price Details</Text>
+            
+            <View style={styles.inputGroup}>
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>Price per kg</Text>
+                <View style={styles.inputWrapper}>
+                  <Ionicons name="cash-outline" size={20} color="#6B7280" />
+                  <TextInput
+                    style={styles.input}
+                    keyboardType="numeric"
+                    value={price}
+                    onChangeText={setPrice}
+                    placeholder="0"
+                    placeholderTextColor="#9CA3AF"
+                  />
+                  <Text style={styles.inputSuffix}>₹</Text>
+                </View>
+              </View>
+
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>Quantity</Text>
+                <View style={styles.inputWrapper}>
+                  <Ionicons name="scale-outline" size={20} color="#6B7280" />
+                  <TextInput
+                    style={styles.input}
+                    keyboardType="numeric"
+                    value={quantity}
+                    onChangeText={setQuantity}
+                    placeholder="0"
+                    placeholderTextColor="#9CA3AF"
+                  />
+                  <Text style={styles.inputSuffix}>kg</Text>
+                </View>
+              </View>
+            </View>
+          </View>
+
+          {/* PHOTO UPLOAD */}
+          <View style={styles.section}>
+            <Text style={styles.sectionLabel}>Photo (Optional)</Text>
+            
+            {photo ? (
+              <View style={styles.photoPreview}>
+                <Image source={{ uri: photo }} style={styles.image} />
+                <TouchableOpacity 
+                  onPress={pickImage} 
+                  style={styles.changePhotoBtn}
+                >
+                  <Ionicons name="camera" size={18} color="#fff" />
+                  <Text style={styles.changePhotoText}>Change Photo</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <TouchableOpacity onPress={pickImage} style={styles.uploadBtn}>
+                <View style={styles.uploadIconContainer}>
+                  <Ionicons name="cloud-upload-outline" size={32} color="#2E7D32" />
+                </View>
+                <Text style={styles.uploadText}>Upload Photo</Text>
+                <Text style={styles.uploadSubtext}>PNG, JPG up to 5MB</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {/* SUBMIT BUTTON */}
+          <TouchableOpacity
+            style={[
+              styles.submitBtn,
+              (!selectedCrop || !selectedMarket || !price || !quantity) && styles.submitBtnDisabled
+            ]}
+            onPress={handleSubmit}
+            disabled={loading || !selectedCrop || !selectedMarket || !price || !quantity}
+          >
+            {loading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <>
+                <Ionicons name="checkmark-circle" size={20} color="#fff" />
+                <Text style={styles.submitText}>Submit Price Entry</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </ScrollView>
+      </KeyboardAvoidingView>
+
+      {/* ---------- CROP MODAL ---------- */}
+      <Modal visible={showCropModal} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <KeyboardAvoidingView 
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            style={styles.modalContainer}
+          >
+            <View style={styles.modalCard}>
+              <View style={styles.modalHeader}>
+                <View style={styles.modalIconContainer}>
+                  <Ionicons name="leaf" size={24} color="#2E7D32" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.modalTitle}>Add New Crop</Text>
+                  <Text style={styles.modalSubtitle}>Enter crop details</Text>
+                </View>
+                <TouchableOpacity 
+                  onPress={() => setShowCropModal(false)}
+                  style={styles.closeButton}
+                >
+                  <Ionicons name="close" size={24} color="#6B7280" />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView showsVerticalScrollIndicator={false}>
+                <View style={styles.modalInputContainer}>
+                  <Text style={styles.modalInputLabel}>Crop Name *</Text>
+                  <View style={styles.modalInputWrapper}>
+                    <Ionicons name="text-outline" size={20} color="#6B7280" />
+                    <TextInput
+                      placeholder="e.g., Wheat, Rice"
+                      style={styles.modalInput}
+                      value={newCropName}
+                      onChangeText={setNewCropName}
+                      placeholderTextColor="#9CA3AF"
+                    />
+                  </View>
+                </View>
+
+                <View style={styles.modalInputContainer}>
+                  <Text style={styles.modalInputLabel}>Crop Type *</Text>
+                  <View style={styles.modalInputWrapper}>
+                    <Ionicons name="pricetag-outline" size={20} color="#6B7280" />
+                    <TextInput
+                      placeholder="e.g., Cereal, Vegetable"
+                      style={styles.modalInput}
+                      value={newCropType}
+                      onChangeText={setNewCropType}
+                      placeholderTextColor="#9CA3AF"
+                    />
+                  </View>
+                </View>
+
+                <View style={styles.modalInputContainer}>
+                  <Text style={styles.modalInputLabel}>Variety *</Text>
+                  <View style={styles.modalInputWrapper}>
+                    <Ionicons name="flower-outline" size={20} color="#6B7280" />
+                    <TextInput
+                      placeholder="e.g., Basmati, Hybrid"
+                      style={styles.modalInput}
+                      value={newCropVariety}
+                      onChangeText={setNewCropVariety}
+                      placeholderTextColor="#9CA3AF"
+                    />
+                  </View>
+                </View>
+              </ScrollView>
+
+              <TouchableOpacity 
+                style={[
+                  styles.modalSubmitBtn,
+                  (!newCropName || !newCropType || !newCropVariety) && styles.modalSubmitBtnDisabled
+                ]}
+                onPress={handleAddCrop}
+                disabled={!newCropName || !newCropType || !newCropVariety}
+              >
+                <Ionicons name="checkmark-circle" size={20} color="#fff" />
+                <Text style={styles.modalSubmitText}>Save Crop</Text>
+              </TouchableOpacity>
+            </View>
+          </KeyboardAvoidingView>
         </View>
       </Modal>
 
       {/* ---------- MARKET MODAL ---------- */}
-      <Modal visible={showMarketModal} transparent animationType="fade">
+      <Modal visible={showMarketModal} transparent animationType="slide">
         <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Add Market</Text>
-              <TouchableOpacity onPress={() => setShowMarketModal(false)}>
-                <MaterialCommunityIcons name="close" size={24} />
+          <KeyboardAvoidingView 
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            style={styles.modalContainer}
+          >
+            <View style={styles.modalCard}>
+              <View style={styles.modalHeader}>
+                <View style={styles.modalIconContainer}>
+                  <Ionicons name="location" size={24} color="#2E7D32" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.modalTitle}>Add New Market</Text>
+                  <Text style={styles.modalSubtitle}>Enter market location details</Text>
+                </View>
+                <TouchableOpacity 
+                  onPress={() => setShowMarketModal(false)}
+                  style={styles.closeButton}
+                >
+                  <Ionicons name="close" size={24} color="#6B7280" />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView showsVerticalScrollIndicator={false}>
+                <View style={styles.modalInputContainer}>
+                  <Text style={styles.modalInputLabel}>Market Name *</Text>
+                  <View style={styles.modalInputWrapper}>
+                    <Ionicons name="storefront-outline" size={20} color="#6B7280" />
+                    <TextInput
+                      placeholder="e.g., City Market"
+                      style={styles.modalInput}
+                      value={newMarketName}
+                      onChangeText={setNewMarketName}
+                      placeholderTextColor="#9CA3AF"
+                    />
+                  </View>
+                </View>
+
+                <View style={styles.modalInputContainer}>
+                  <Text style={styles.modalInputLabel}>City *</Text>
+                  <View style={styles.modalInputWrapper}>
+                    <Ionicons name="business-outline" size={20} color="#6B7280" />
+                    <TextInput
+                      placeholder="e.g., Mumbai"
+                      style={styles.modalInput}
+                      value={marketCity}
+                      onChangeText={setMarketCity}
+                      placeholderTextColor="#9CA3AF"
+                    />
+                  </View>
+                </View>
+
+                <View style={styles.modalInputContainer}>
+                  <Text style={styles.modalInputLabel}>State *</Text>
+                  <View style={styles.modalInputWrapper}>
+                    <Ionicons name="map-outline" size={20} color="#6B7280" />
+                    <TextInput
+                      placeholder="e.g., Maharashtra"
+                      style={styles.modalInput}
+                      value={marketState}
+                      onChangeText={setMarketState}
+                      placeholderTextColor="#9CA3AF"
+                    />
+                  </View>
+                </View>
+
+                <View style={styles.modalInputContainer}>
+                  <Text style={styles.modalInputLabel}>Country *</Text>
+                  <View style={styles.modalInputWrapper}>
+                    <Ionicons name="globe-outline" size={20} color="#6B7280" />
+                    <TextInput
+                      placeholder="e.g., India"
+                      style={styles.modalInput}
+                      value={marketCountry}
+                      onChangeText={setMarketCountry}
+                      placeholderTextColor="#9CA3AF"
+                    />
+                  </View>
+                </View>
+              </ScrollView>
+
+              <TouchableOpacity 
+                style={[
+                  styles.modalSubmitBtn,
+                  (!newMarketName || !marketCity || !marketState || !marketCountry) && styles.modalSubmitBtnDisabled
+                ]}
+                onPress={handleAddMarket}
+                disabled={!newMarketName || !marketCity || !marketState || !marketCountry}
+              >
+                <Ionicons name="checkmark-circle" size={20} color="#fff" />
+                <Text style={styles.modalSubmitText}>Save Market</Text>
               </TouchableOpacity>
             </View>
-
-            <TextInput
-              placeholder="Market Name"
-              style={styles.input}
-              value={newMarketName}
-              onChangeText={setNewMarketName}
-            />
-            <TextInput
-              placeholder="City"
-              style={styles.input}
-              value={marketCity}
-              onChangeText={setMarketCity}
-            />
-            <TextInput
-              placeholder="State"
-              style={styles.input}
-              value={marketState}
-              onChangeText={setMarketState}
-            />
-            <TextInput
-              placeholder="Country"
-              style={styles.input}
-              value={marketCountry}
-              onChangeText={setMarketCountry}
-            />
-
-            <TouchableOpacity style={styles.submit} onPress={handleAddMarket}>
-              <Text style={styles.submitText}>Save Market</Text>
-            </TouchableOpacity>
-          </View>
+          </KeyboardAvoidingView>
         </View>
       </Modal>
     </SafeAreaView>
@@ -411,77 +615,334 @@ export default function AddFarmerEntry() {
 
 /* ---------- STYLES ---------- */
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: "#f3f4f6" },
-  scroll: { padding: 20, maxWidth: 600, alignSelf: "center" },
+  safe: { 
+    flex: 1, 
+    backgroundColor: "#F9FAFB" 
+  },
+  
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: "#fff",
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E7EB",
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#F3F4F6",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  title: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#111827",
+  },
 
-  header: { flexDirection: "row", alignItems: "center", marginBottom: 20 },
-  title: { flex: 1, textAlign: "center", fontSize: 22, fontWeight: "800" },
+  scroll: {
+    padding: 16,
+    maxWidth: 600,
+    alignSelf: "center",
+    width: "100%",
+  },
+
+  infoCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#EFF6FF",
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 20,
+    gap: 10,
+  },
+  infoText: {
+    flex: 1,
+    fontSize: 13,
+    color: "#1E40AF",
+    lineHeight: 18,
+  },
+
+  section: {
+    marginBottom: 24,
+  },
+  sectionLabel: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#111827",
+    marginBottom: 12,
+  },
 
   labelRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginTop: 16,
-    marginBottom: 6,
+    marginBottom: 12,
   },
-  label: { fontWeight: "700", fontSize: 14 },
-  addText: { color: "#2E7D32", fontWeight: "700" },
-
-  input: {
-    backgroundColor: "#fff",
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "#D1D5DB",
-    padding: 12,
-    marginBottom: 10,
+  addButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  addText: {
+    color: "#2E7D32",
+    fontWeight: "600",
+    fontSize: 14,
   },
 
+  chipsContainer: {
+    paddingVertical: 4,
+    gap: 8,
+  },
   chip: {
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 8,
-    borderWidth: 1,
-    marginRight: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 24,
     backgroundColor: "#fff",
+    borderWidth: 2,
+    borderColor: "#E5E7EB",
+    marginRight: 8,
   },
-  chipActive: { borderColor: "#2E7D32", borderWidth: 2 },
-
-  photoBtn: {
-    marginTop: 16,
-    padding: 12,
-    backgroundColor: "#E5E7EB",
-    borderRadius: 8,
-    alignItems: "center",
-  },
-  image: { height: 200, borderRadius: 10, marginTop: 12 },
-
-  submit: {
-    marginTop: 24,
+  chipActive: {
     backgroundColor: "#2E7D32",
-    padding: 14,
-    borderRadius: 12,
-    alignItems: "center",
+    borderColor: "#2E7D32",
   },
-  submitText: { color: "#fff", fontWeight: "700", fontSize: 16 },
+  chipText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#374151",
+  },
+  chipTextActive: {
+    color: "#fff",
+  },
 
+  emptyState: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 32,
+    backgroundColor: "#F9FAFB",
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: "#E5E7EB",
+    borderStyle: "dashed",
+  },
+  emptyText: {
+    marginTop: 8,
+    fontSize: 14,
+    color: "#6B7280",
+  },
+
+  inputGroup: {
+    gap: 12,
+  },
+  inputContainer: {
+    marginBottom: 4,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#374151",
+    marginBottom: 8,
+  },
+  inputWrapper: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: "#D1D5DB",
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    gap: 10,
+  },
+  input: {
+    flex: 1,
+    fontSize: 16,
+    color: "#111827",
+    paddingVertical: 10,
+  },
+  inputSuffix: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#6B7280",
+  },
+
+  uploadBtn: {
+    backgroundColor: "#F0FDF4",
+    borderWidth: 2,
+    borderColor: "#86EFAC",
+    borderStyle: "dashed",
+    borderRadius: 12,
+    paddingVertical: 32,
+    alignItems: "center",
+    gap: 8,
+  },
+  uploadIconContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: "#DCFCE7",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 8,
+  },
+  uploadText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#166534",
+  },
+  uploadSubtext: {
+    fontSize: 13,
+    color: "#6B7280",
+  },
+
+  photoPreview: {
+    position: "relative",
+  },
+  image: {
+    width: "100%",
+    height: 200,
+    borderRadius: 12,
+    backgroundColor: "#F3F4F6",
+  },
+  changePhotoBtn: {
+    position: "absolute",
+    bottom: 12,
+    right: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "rgba(0,0,0,0.7)",
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+  },
+  changePhotoText: {
+    color: "#fff",
+    fontWeight: "600",
+    fontSize: 13,
+  },
+
+  submitBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: "#2E7D32",
+    paddingVertical: 16,
+    borderRadius: 12,
+    marginTop: 8,
+  },
+  submitBtnDisabled: {
+    backgroundColor: "#9CA3AF",
+  },
+  submitText: {
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: 16,
+  },
+
+  // Modal Styles
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.45)",
-    justifyContent: "center",
-    alignItems: "center",
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "flex-end",
+  },
+  modalContainer: {
+    justifyContent: "flex-end",
   },
   modalCard: {
-    width: "92%",
-    maxWidth: 420,
     backgroundColor: "#fff",
-    borderRadius: 16,
-    padding: 18,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingTop: 20,
+    paddingBottom: 40,
+    paddingHorizontal: 20,
+    maxHeight: "90%",
   },
   modalHeader: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 14,
+    marginBottom: 20,
+    gap: 12,
   },
-  modalTitle: { fontSize: 18, fontWeight: "800" },
+  modalIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: "#DCFCE7",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#111827",
+  },
+  modalSubtitle: {
+    fontSize: 13,
+    color: "#6B7280",
+    marginTop: 2,
+  },
+  closeButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "#F3F4F6",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  modalInputContainer: {
+    marginBottom: 16,
+  },
+  modalInputLabel: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#374151",
+    marginBottom: 8,
+  },
+  modalInputWrapper: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F9FAFB",
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: "#E5E7EB",
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    gap: 10,
+  },
+  modalInput: {
+    flex: 1,
+    fontSize: 16,
+    color: "#111827",
+    paddingVertical: 10,
+  },
+
+  modalSubmitBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: "#2E7D32",
+    paddingVertical: 16,
+    borderRadius: 12,
+    marginTop: 8,
+  },
+  modalSubmitBtnDisabled: {
+    backgroundColor: "#D1D5DB",
+  },
+  modalSubmitText: {
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: 16,
+  },
 });

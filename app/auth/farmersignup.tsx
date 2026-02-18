@@ -3,6 +3,7 @@ import { StatusBar } from "expo-status-bar";
 import { useState } from "react";
 import { ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { authAPI } from "../../services/api";
 import {
   AuthBackground,
   AuthCard,
@@ -10,6 +11,7 @@ import {
   AuthSegmentedTabs,
   AuthTextField,
   EyeToggle,
+  SectionHeader,
 } from "./_ui";
 
 type FormData = {
@@ -49,14 +51,64 @@ export default function FarmerSignUp() {
     setForm((prev) => ({ ...prev, [key]: value }));
   };
 
-  const handleSignUp = () => {
-    // No-op - API not implemented yet
+  const [loading, setLoading] = useState(false);
+
+  const handleSignUp = async () => {
+    const { name, email, mobile, password, city, state, country, farmSize, cropsGrown, irrigationType, soilType } = form;
+
+    // Validation
+    if (!name || !email || !mobile || !password || !city || !state) {
+      alert("Please fill all required fields");
+      return;
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      alert("Please enter a valid email");
+      return;
+    }
+
+    if (!/^\d{10}$/.test(mobile)) {
+      alert("Enter a valid 10-digit mobile number");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const payload = {
+        name: name,
+        mobile: mobile,
+        email: email.toLowerCase().trim(),
+        password: password,
+        farmerAddress: {
+          city: city,
+          state: state,
+          country: country,
+        },
+        farmDetails: {
+          farmSize: farmSize || "Not specified",
+          cropIds: [],
+          preferredMarketIds: [],
+          irrigationType: irrigationType || "Not specified",
+          soilType: soilType || "Not specified",
+        },
+      };
+
+      const res = await authAPI.farmerSignup(payload);
+
+      // DEV MODE: Skip email verification - allow immediate login
+      alert(res.data?.message || "Farmer registered successfully! You can now login to your account.");
+      router.replace("/auth/farmerlogin");
+    } catch (err: any) {
+      alert(err.response?.data?.message || "Registration failed. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
     <AuthBackground>
       <SafeAreaView className="flex-1">
-        <StatusBar style="light" />
+        <StatusBar style="dark" />
 
         <ScrollView
           className="flex-1"
@@ -64,8 +116,6 @@ export default function FarmerSignUp() {
           showsVerticalScrollIndicator={false}
         >
           <View className="w-full max-w-md mx-auto">
-            <AuthHeader title="Farmer Sign Up" subtitle="Create your farmer profile" />
-
             <View className="mb-4">
               <AuthSegmentedTabs
                 leftLabel="Sign In"
@@ -77,9 +127,18 @@ export default function FarmerSignUp() {
             </View>
 
             <AuthCard>
-              <View className="gap-4">
+              <AuthHeader 
+                title="Farmer Sign Up" 
+                subtitle="Create your account" 
+                icon="account-plus-outline"
+              />
+
+              <View className="gap-4 mt-6">
+                {/* Personal Information Section */}
+                <SectionHeader title="Personal Information" />
+                
                 <AuthTextField
-                  label="Name"
+                  label="Full Name"
                   icon="account-outline"
                   value={form.name}
                   onChangeText={(t) => update("name", t)}
@@ -116,7 +175,10 @@ export default function FarmerSignUp() {
                   right={<EyeToggle shown={showPassword} onPress={() => setShowPassword(!showPassword)} />}
                 />
 
-                <View className="h-px bg-white/10" />
+                {/* Address Details Section */}
+                <View className="mt-4">
+                  <SectionHeader title="Address Details" />
+                </View>
 
                 <AuthTextField
                   label="City"
@@ -142,8 +204,13 @@ export default function FarmerSignUp() {
                   placeholder="Country"
                 />
 
+                {/* Farm Details Section */}
+                <View className="mt-4">
+                  <SectionHeader title="Farm Details" />
+                </View>
+
                 <AuthTextField
-                  label="Farm size"
+                  label="Farm Size"
                   icon="ruler-square"
                   value={form.farmSize}
                   onChangeText={(t) => update("farmSize", t)}
@@ -151,7 +218,7 @@ export default function FarmerSignUp() {
                 />
 
                 <AuthTextField
-                  label="Crops grown"
+                  label="Crops Grown"
                   icon="sprout"
                   value={form.cropsGrown}
                   onChangeText={(t) => update("cropsGrown", t)}
@@ -159,7 +226,7 @@ export default function FarmerSignUp() {
                 />
 
                 <AuthTextField
-                  label="Irrigation type"
+                  label="Irrigation Type"
                   icon="water-outline"
                   value={form.irrigationType}
                   onChangeText={(t) => update("irrigationType", t)}
@@ -167,7 +234,7 @@ export default function FarmerSignUp() {
                 />
 
                 <AuthTextField
-                  label="Soil type"
+                  label="Soil Type"
                   icon="earth"
                   value={form.soilType}
                   onChangeText={(t) => update("soilType", t)}
@@ -176,16 +243,19 @@ export default function FarmerSignUp() {
 
                 <TouchableOpacity
                   onPress={handleSignUp}
-                  className="bg-farmer-600 rounded-2xl py-4 mt-2"
+                  disabled={loading}
+                  className="bg-agri-primary rounded-2xl py-4 mt-4"
                   activeOpacity={0.9}
                 >
-                  <Text className="text-white text-center font-extrabold text-base">Sign Up</Text>
+                  <Text className="text-white text-center font-bold text-base">
+                    {loading ? "Creating Account..." : "Create Account"}
+                  </Text>
                 </TouchableOpacity>
 
                 <View className="flex-row justify-center items-center pt-2">
-                  <Text className="text-zinc-400 text-sm">Already have an account? </Text>
+                  <Text className="text-gray-600 text-sm">Already have an account? </Text>
                   <TouchableOpacity onPress={() => router.push("/auth/farmerlogin")}>
-                    <Text className="text-farmer-400 text-sm font-semibold">Sign In</Text>
+                    <Text className="text-agri-primary text-sm font-semibold">Sign In</Text>
                   </TouchableOpacity>
                 </View>
               </View>

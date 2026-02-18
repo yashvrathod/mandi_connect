@@ -1,11 +1,11 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import axios from "axios";
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -16,9 +16,25 @@ import {
   SafeAreaView,
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
+import { useAuth } from "../../../context/AuthContext";
+import { authAPI } from "../../../services/api";
 import { ModernCard, SegmentedTabs } from "../../ui/components";
 
-const BASE_URL = "https://mandiconnect.onrender.com";
+const showAlert = (title: string, message: string, onConfirm?: () => void) => {
+  if (Platform.OS === "web") {
+    const result = window.confirm(`${title}\n\n${message}`);
+    if (result && onConfirm) onConfirm();
+  } else {
+    if (onConfirm) {
+      Alert.alert(title, message, [
+        { text: "Cancel", style: "cancel" },
+        { text: "Delete", style: "destructive", onPress: onConfirm },
+      ]);
+    } else {
+      Alert.alert(title, message);
+    }
+  }
+};
 
 /* ---------- TYPES ---------- */
 type BuyerProfileType = {
@@ -38,6 +54,7 @@ type BuyerProfileType = {
 export default function BuyerProfile() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { user, logout } = useAuth();
 
   const [buyer, setBuyer] = useState<BuyerProfileType | null>(null);
   const [loading, setLoading] = useState(true);
@@ -52,64 +69,70 @@ export default function BuyerProfile() {
     try {
       setLoading(true);
       setError(null);
-      
-      const token = await AsyncStorage.getItem("token");
-      const loginEmail = await AsyncStorage.getItem("loginEmail");
 
-      console.log("Profile - Token:", token ? "exists" : "missing");
-      console.log("Profile - Login Email:", loginEmail);
-
-      if (!token || !loginEmail) {
-        setError("Session expired. Please login again.");
+      // Check if user exists
+      if (!user) {
+        setError("No user session found. Please login again.");
         return;
       }
 
-      const res = await axios.get(`${BASE_URL}/buyer/getAll`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-
-      console.log("Profile - API Response:", res.data ? `${res.data.length} buyers` : "empty");
-
-      // Try multiple matching strategies
-      const matchedBuyer = res.data.find((b: any) => {
-        const buyerEmail = b.Email || b.email;
-        return buyerEmail?.toLowerCase() === loginEmail.toLowerCase();
-      });
-
-      console.log("Profile - Matched Buyer:", matchedBuyer ? "found" : "not found");
-
-      if (!matchedBuyer) {
-        setError("Buyer profile not found. Please contact support.");
-        console.error("Profile - No match found for email:", loginEmail);
-        return;
-      }
-
+      // Use user from AuthContext
       setBuyer({
-        id: String(matchedBuyer.id || matchedBuyer._id),
-        name: matchedBuyer.Name || matchedBuyer.name,
-        email: matchedBuyer.Email || matchedBuyer.email,
-        mobile: matchedBuyer.Mobile || matchedBuyer.mobile,
-        companyName: matchedBuyer["Company Name"] || matchedBuyer.companyName || "Unknown Company",
-        companyAddress: {
-          city: matchedBuyer["Company Address"]?.City || matchedBuyer.companyAddress?.city,
-          state: matchedBuyer["Company Address"]?.State || matchedBuyer.companyAddress?.state,
-          country: matchedBuyer["Company Address"]?.Country || matchedBuyer.companyAddress?.country,
-        },
-        verified: matchedBuyer.verified || false,
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        mobile: user.phone || "",
+        // @ts-ignore
+        companyName: user.companyName || user["Company Name"] || "N/A",
+        // @ts-ignore
+        companyAddress: user.companyAddress || user["Company Address"],
+        verified: true,
       });
-      
+
       console.log("Profile - Successfully loaded");
     } catch (e: any) {
       console.error("Profile - Error:", e.message || e);
+      if (e.response?.status === 401) {
+        await logout();
+        router.replace("/auth/buyerlogin");
+      }
       setError("Unable to load profile. Please try again.");
     } finally {
       setLoading(false);
     }
   };
 
-  const logout = async () => {
-    await AsyncStorage.multiRemove(["token", "loginEmail", "role"]);
-    router.replace("/auth/buyerlogin");
+  const handleLogout = async () => {
+    await logout();
+    router.replace("/");
+  };
+
+  const handleDeleteAccount = () => {
+    showAlert(
+      "Delete Account",
+      "Are you sure you want to delete your account? This action cannot be undone. All your data including demands, connections, and business information will be permanently deleted.",
+      async () => {
+        try {
+          if (!buyer?.id) {
+            showAlert("Error", "Unable to delete account. User ID not found.");
+            return;
+          }
+
+          await authAPI.buyerDelete(buyer.id);
+          
+          showAlert("Account Deleted", "Your account has been successfully deleted.");
+          
+          // Logout and redirect to home
+          await logout();
+          router.replace("/");
+        } catch (error: any) {
+          showAlert(
+            "Delete Failed",
+            error.response?.data?.message || "Unable to delete account. Please try again."
+          );
+        }
+      }
+    );
   };
 
   /* ---------- LOADING ---------- */
@@ -137,7 +160,7 @@ export default function BuyerProfile() {
         </Text>
         <TouchableOpacity
           className="bg-brand-600 rounded-2xl py-3 px-6"
-          onPress={logout}
+          onPress={handleLogout}
           activeOpacity={0.9}
         >
           <Text className="text-white font-bold">Go to Login</Text>
@@ -243,14 +266,26 @@ export default function BuyerProfile() {
             </View>
 
             <TouchableOpacity
-              className="flex-row items-center justify-between bg-red-50 border border-red-200 rounded-xl p-4"
-              onPress={logout}
+              className="flex-row items-center justify-between bg-red-50 border border-red-200 rounded-xl p-4 mb-3"
+              onPress={handleLogout}
               activeOpacity={0.8}
             >
               <View className="flex-row items-center gap-3">
                 <MaterialCommunityIcons name="logout" size={22} color="#DC2626" />
                 <Text className="text-red-600 font-bold">Logout</Text>
               </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              className="flex-row items-center justify-between bg-red-100 border-2 border-red-300 rounded-xl p-4"
+              onPress={handleDeleteAccount}
+              activeOpacity={0.8}
+            >
+              <View className="flex-row items-center gap-3">
+                <MaterialCommunityIcons name="delete-forever" size={22} color="#DC2626" />
+                <Text className="text-red-700 font-bold">Delete Account</Text>
+              </View>
+              <MaterialCommunityIcons name="alert-circle" size={20} color="#DC2626" />
             </TouchableOpacity>
           </ModernCard>
         </View>

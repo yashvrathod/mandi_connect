@@ -1,11 +1,14 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import axios from "axios";
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useMemo, useState } from "react";
-import { FlatList, Image, Modal, Text, TouchableOpacity, View } from "react-native";
+import { Alert, FlatList, Image, Modal, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { useAuth } from "../../../context/AuthContext";
+import { commonAPI, buyerMarketplaceAPI, farmerMarketplaceAPI, connectionAPI } from "../../../services/api";
+import { extractUserId, buildConnectionRequest } from "@/utils/apiHelpers";
+import { handleApiError } from "@/utils/errorHandler";
+import logger from "@/utils/logger";
 import {
   AnimatedIn,
   EmptyState,
@@ -14,8 +17,6 @@ import {
   PillBadge,
   SegmentedTabs,
 } from "../../ui/components";
-
-const BASE_URL = "https://mandiconnect.onrender.com";
 const FALLBACK_IMAGE =
   "https://images.unsplash.com/photo-1567306226416-28f0efdc88ce";
 
@@ -25,11 +26,13 @@ type BuyerDemand = {
   _id?: string;
   CropId?: string;
   buyerId?: string;
+  BuyerId?: string;
   market?: any;
   Market?: string;
   ExpectedPrice?: { Value?: number };
   RequiredQuantity?: { Value?: number; Unit?: string };
   status?: string;
+  [key: string]: any; // Allow other fields from API
 };
 
 type FarmerListing = {
@@ -57,6 +60,7 @@ type DemandViewModel = {
 
 export default function FarmerMarketplace() {
   const router = useRouter();
+  const { user, logout } = useAuth();
   const insets = useSafeAreaInsets();
 
   const [activeTab, setActiveTab] = useState<TabType>("demands");
@@ -70,31 +74,31 @@ export default function FarmerMarketplace() {
   const [viewDemand, setViewDemand] = useState<DemandViewModel | null>(null);
   const [connectRequested, setConnectRequested] = useState(false);
 
-  /* ---------- AUTH ---------- */
-  const getHeaders = async () => {
-    const token = await AsyncStorage.getItem("token");
-    return { Authorization: `Bearer ${token}` };
-  };
-
   /* ---------- LOAD CROPS ---------- */
   const loadCrops = async () => {
-    const headers = await getHeaders();
-    const res = await axios.get(`${BASE_URL}/getAllCrop`, { headers });
-
-    const map: Record<string, string> = {};
-    res.data.forEach((c: any) => {
-      map[c._id || c.id] = c.name;
-    });
-    setCropMap(map);
+    try {
+      const res = await commonAPI.getAllCrops();
+      const map: Record<string, string> = {};
+      res.data.forEach((c: any) => {
+        map[c._id || c.id] = c.name;
+      });
+      setCropMap(map);
+    } catch (error: any) {
+      if (error.response?.status === 401) await logout();
+    }
   };
 
   /* ---------- FETCH DATA ---------- */
   const fetchBuyerDemands = async () => {
     try {
       setLoading(true);
-      const headers = await getHeaders();
-      const res = await axios.get(`${BASE_URL}/marketplace/buyer/all`, { headers });
-      setDemands(Array.isArray(res.data) ? res.data : []);
+      const res = await buyerMarketplaceAPI.getAllDemands();
+      const demandsData = Array.isArray(res.data) ? res.data : [];
+      console.log("Fetched demands:", JSON.stringify(demandsData[0], null, 2)); // Debug first demand
+      setDemands(demandsData);
+    } catch (error: any) {
+      if (error.response?.status === 401) await logout();
+      console.error("Error fetching demands:", error);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -104,11 +108,10 @@ export default function FarmerMarketplace() {
   const fetchMyListings = async () => {
     try {
       setLoading(true);
-      const headers = await getHeaders();
-      const res = await axios.get(`${BASE_URL}/marketplace/farmer/getAllListing`, {
-        headers,
-      });
+      const res = await farmerMarketplaceAPI.getAllListings();
       setListings(Array.isArray(res.data) ? res.data : []);
+    } catch (error: any) {
+      if (error.response?.status === 401) await logout();
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -117,30 +120,59 @@ export default function FarmerMarketplace() {
 
   /* ---------- CONNECT TO BUYER ---------- */
   const connectToBuyer = async () => {
-    if (!viewDemand?.id || !viewDemand.buyerId) return;
+    if (!viewDemand?.id || viewDemand.id.startsWith('temp-')) {
+      logger.warn("Connect attempt with invalid demand ID", { demandId: viewDemand?.id });
+      Alert.alert(
+        "Error", 
+        "Cannot connect: Demand ID not available. Please contact support if this issue persists."
+      );
+      return;
+    }
+
+    if (!user?.id) {
+      logger.warn("Connect attempt without user login");
+      Alert.alert("Error", "You must be logged in to send connection requests");
+      return;
+    }
+
+    // Extract buyer ID using helper
+    const buyerId = extractUserId(viewDemand.raw, 'buyer');
+
+    if (!buyerId) {
+      logger.warn("Missing buyer ID from demand", { 
+        demandId: viewDemand.id,
+        availableFields: Object.keys(viewDemand.raw || {})
+      });
+      Alert.alert(
+        "Error", 
+        "Cannot connect: Buyer information not available. Please contact support if this issue persists."
+      );
+      return;
+    }
 
     try {
-      const token = await AsyncStorage.getItem("token");
-      const farmerId = await AsyncStorage.getItem("farmerId");
-
-      await axios.post(
-        `${BASE_URL}/connections/send`,
-        {
-          senderId: farmerId,
-          senderRole: "FARMER",
-          receiverId: viewDemand.buyerId,
-          receiverRole: "BUYER",
-          referenceType: "BUYER_DEMAND",
-          referenceId: viewDemand.id,
-        },
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        },
+      const payload = buildConnectionRequest(
+        buyerId,
+        'buyer',
+        'demand',
+        viewDemand.id,
+        `I can supply ${viewDemand.cropName} as per your demand.`
       );
+      
+      logger.info('Sending connection request', { 
+        recipientId: buyerId,
+        demandId: viewDemand.id 
+      });
+      
+      await connectionAPI.sendRequest(payload);
 
       setConnectRequested(true);
-    } catch (err) {
-      console.log("Connect error", err);
+      Alert.alert("Success", "Connection request sent to buyer!");
+      logger.info('Connection request sent successfully');
+    } catch (err: any) {
+      logger.error("Failed to send connection request", err);
+      const errorMsg = handleApiError(err, 'Sending connection request');
+      Alert.alert("Error", errorMsg);
     }
   };
 
@@ -172,15 +204,28 @@ export default function FarmerMarketplace() {
     return demands.map((d, i) => {
       const cropName = cropMap[d.CropId || ""] || "Unknown Crop";
       const marketName = d.market?.marketName || d.market?.name || d.Market || "—";
+      // Extract buyerId from various possible field names
+      const buyerId = d.buyerId || (d as any).BuyerId || (d as any).buyerid || (d as any)["Buyer ID"];
+      // Extract demand ID - try multiple field names including capitalized versions
+      const demandId = d._id || (d as any).id || (d as any).Id || (d as any).ID || (d as any)["Demand ID"] || (d as any).demandId || (d as any).DemandId;
+      
+      console.log(`Demand ${i}:`, {
+        demandId,
+        buyerId,
+        rawKeys: Object.keys(d),
+        _id: d._id,
+        id: (d as any).id
+      });
+      
       return {
-        id: d._id || String(i),
+        id: demandId || `temp-${i}`, // Fallback to temp ID
         cropName,
         marketName,
         expectedPrice: d.ExpectedPrice?.Value ?? 0,
         quantityValue: d.RequiredQuantity?.Value ?? 0,
         quantityUnit: d.RequiredQuantity?.Unit ?? "",
         status: d.status || "active",
-        buyerId: d.buyerId,
+        buyerId: buyerId,
         raw: d,
       };
     });

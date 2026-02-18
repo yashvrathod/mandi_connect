@@ -1,14 +1,28 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import axios from "axios";
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Alert, Platform, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { useAuth } from "../../../context/AuthContext";
+import { authAPI } from "../../../services/api";
 import { ModernCard, SegmentedTabs } from "../../ui/components";
 
-const BASE_URL = "https://mandiconnect.onrender.com";
+const showAlert = (title: string, message: string, onConfirm?: () => void) => {
+  if (Platform.OS === "web") {
+    const result = window.confirm(`${title}\n\n${message}`);
+    if (result && onConfirm) onConfirm();
+  } else {
+    if (onConfirm) {
+      Alert.alert(title, message, [
+        { text: "Cancel", style: "cancel" },
+        { text: "Delete", style: "destructive", onPress: onConfirm },
+      ]);
+    } else {
+      Alert.alert(title, message);
+    }
+  }
+};
 
 type FarmerProfileType = {
   id: string;
@@ -25,6 +39,7 @@ type FarmerProfileType = {
 export default function FarmerProfile() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { user, logout } = useAuth();
 
   const [farmer, setFarmer] = useState<FarmerProfileType | null>(null);
   const [loading, setLoading] = useState(true);
@@ -40,19 +55,31 @@ export default function FarmerProfile() {
       setLoading(true);
       setError(null);
 
-      const token = await AsyncStorage.getItem("token");
-      if (!token) {
-        setError("Session expired. Please login again.");
+      // Use user from AuthContext first
+      if (user) {
+        setFarmer({
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          mobile: user.phone || "",
+          verified: true,
+          // @ts-ignore
+          farmerAddress: user.farmerAddress,
+        });
+        setLoading(false);
         return;
       }
 
-      // API doesn’t require auth here in the existing codebase
-      const res = await axios.get(`${BASE_URL}/farmer/getFarmers`);
-      const email = JSON.parse(atob(token.split(".")[1]))?.sub?.toLowerCase();
-
-      const match = (Array.isArray(res.data) ? res.data : []).find(
-        (f: any) => f.email?.toLowerCase() === email,
-      );
+      // Fallback: fetch from API
+      const res = await authAPI.getAllFarmers();
+      // @ts-ignore - user might be null but we have fallback
+      const userEmail = user?.email?.toLowerCase() || "";
+      const farmers: any = res.data;
+      let match: any = null;
+      
+      if (Array.isArray(farmers)) {
+        match = farmers.find((f: any) => f?.email?.toLowerCase() === userEmail);
+      }
 
       if (!match) {
         setError("Farmer profile not found.");
@@ -71,15 +98,47 @@ export default function FarmerProfile() {
         },
       });
     } catch (e: any) {
+      if (e.response?.status === 401) {
+        await logout();
+        router.replace("/auth/farmerlogin");
+      }
       setError("Unable to load profile. Please try again.");
     } finally {
       setLoading(false);
     }
   };
 
-  const logout = async () => {
-    await AsyncStorage.multiRemove(["token", "role"]);
-    router.replace("/auth/farmerlogin");
+  const handleLogout = async () => {
+    await logout();
+    router.replace("/");
+  };
+
+  const handleDeleteAccount = () => {
+    showAlert(
+      "Delete Account",
+      "Are you sure you want to delete your account? This action cannot be undone. All your data including crop entries, listings, and connections will be permanently deleted.",
+      async () => {
+        try {
+          if (!farmer?.id) {
+            showAlert("Error", "Unable to delete account. User ID not found.");
+            return;
+          }
+
+          await authAPI.farmerDelete(farmer.id);
+          
+          showAlert("Account Deleted", "Your account has been successfully deleted.");
+          
+          // Logout and redirect to home
+          await logout();
+          router.replace("/");
+        } catch (error: any) {
+          showAlert(
+            "Delete Failed",
+            error.response?.data?.message || "Unable to delete account. Please try again."
+          );
+        }
+      }
+    );
   };
 
   /* ---------- LOADING ---------- */
@@ -107,7 +166,7 @@ export default function FarmerProfile() {
         </Text>
         <TouchableOpacity
           className="bg-farmer-600 rounded-2xl py-3 px-6"
-          onPress={logout}
+          onPress={handleLogout}
           activeOpacity={0.9}
         >
           <Text className="text-white font-bold">Go to Login</Text>
@@ -178,14 +237,26 @@ export default function FarmerProfile() {
               <SectionTitle icon="cog" title="Settings" />
 
               <TouchableOpacity
-                className="flex-row items-center justify-between bg-red-50 border border-red-200 rounded-xl p-4"
-                onPress={logout}
+                className="flex-row items-center justify-between bg-red-50 border border-red-200 rounded-xl p-4 mb-3"
+                onPress={handleLogout}
                 activeOpacity={0.8}
               >
                 <View className="flex-row items-center gap-3">
                   <MaterialCommunityIcons name="logout" size={22} color="#DC2626" />
                   <Text className="text-red-600 font-bold">Logout</Text>
                 </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                className="flex-row items-center justify-between bg-red-100 border-2 border-red-300 rounded-xl p-4"
+                onPress={handleDeleteAccount}
+                activeOpacity={0.8}
+              >
+                <View className="flex-row items-center gap-3">
+                  <MaterialCommunityIcons name="delete-forever" size={22} color="#DC2626" />
+                  <Text className="text-red-700 font-bold">Delete Account</Text>
+                </View>
+                <MaterialCommunityIcons name="alert-circle" size={20} color="#DC2626" />
               </TouchableOpacity>
             </ModernCard>
           </View>

@@ -3,22 +3,22 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { Dimensions, Image, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
+import { useResponsive } from "@/hooks/useResponsive";
 
 export default function Index() {
   const router = useRouter();
+  const { fontSize, spacing, iconSize, hp, isSmallDevice, isMediumDevice } = useResponsive();
 
   const goAsBuyer = async () => {
     console.log("Buyer button pressed");
     try {
       const token = await AsyncStorage.getItem("token");
-      const role = await AsyncStorage.getItem("role");
+      const userRole = await AsyncStorage.getItem("userRole");
 
-      if (token && role === "buyer") {
-        router.push("/auth/buyer/buyerdashboard");
+      if (token && userRole === "buyer") {
+        router.replace("/auth/buyer/buyerdashboard");
       } else {
         router.push("/auth/buyerlogin");
       }
@@ -31,10 +31,10 @@ export default function Index() {
     console.log("Farmer button pressed");
     try {
       const token = await AsyncStorage.getItem("token");
-      const role = await AsyncStorage.getItem("role");
+      const userRole = await AsyncStorage.getItem("userRole");
 
-      if (token && role === "farmer") {
-        router.push("/auth/farmer/farmer-dashboard");
+      if (token && userRole === "farmer") {
+        router.replace("/auth/farmer/farmer-dashboard");
       } else {
         router.push("/auth/farmerlogin");
       }
@@ -44,282 +44,225 @@ export default function Index() {
   };
 
   return (
-    <View className="flex-1 bg-white">
-      {/* Gradient Background */}
-      <LinearGradient
-        colors={["#F0FDF4", "#FFFFFF", "#F9FAFB"]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        className="absolute inset-0"
-        pointerEvents="none"
-      />
-
+    <View className="flex-1 bg-agri-bg">
       <SafeAreaView className="flex-1">
         <StatusBar style="dark" />
 
         <ScrollView
           className="flex-1"
           contentContainerStyle={{ 
-            paddingHorizontal: SCREEN_WIDTH * 0.05,
-            paddingVertical: SCREEN_HEIGHT * 0.04,
-            minHeight: SCREEN_HEIGHT * 0.9,
+            paddingHorizontal: spacing.lg,
+            paddingVertical: hp(4),
+            minHeight: hp(90),
             justifyContent: 'center'
           }}
           showsVerticalScrollIndicator={false}
         >
           <View style={{ width: '100%', maxWidth: 480, alignSelf: 'center' }}>
             {/* Header Section */}
-            <View className="items-center" style={{ marginBottom: SCREEN_HEIGHT * 0.04 }}>
-              <View style={{ marginBottom: SCREEN_HEIGHT * 0.02 }}>
+            <View className="items-center" style={{ marginBottom: spacing.xl }}>
+              {/* Logo in circular container */}
+              <View style={{ marginBottom: spacing.md }}>
                 <View 
-                  className="rounded-full bg-green-500 items-center justify-center"
+                  className="rounded-full bg-agri-primary items-center justify-center"
                   style={{ 
-                    height: SCREEN_WIDTH * 0.18, 
-                    width: SCREEN_WIDTH * 0.18,
-                    maxHeight: 96,
-                    maxWidth: 96
+                    height: isSmallDevice ? 80 : 100, 
+                    width: isSmallDevice ? 80 : 100,
+                    shadowColor: '#1E7D3A',
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.2,
+                    shadowRadius: 8,
+                    elevation: 5,
                   }}
                 >
-                  <Text style={{ fontSize: Math.min(SCREEN_WIDTH * 0.12, 56) }}>🌾</Text>
+                  <Text style={{ fontSize: isSmallDevice ? 40 : 50 }}>🌾</Text>
                 </View>
               </View>
               <Text 
-                className="text-gray-900 font-bold text-center"
-                style={{ fontSize: Math.min(SCREEN_WIDTH * 0.09, 36) }}
+                className="text-agri-text font-bold text-center"
+                style={{ fontSize: fontSize['3xl'], marginBottom: spacing.sm }}
               >
-                Mandi Connect
+                MandiConnect
               </Text>
               <Text 
-                className="text-gray-600 text-center px-4"
+                className="text-gray-600 text-center"
                 style={{ 
-                  fontSize: Math.min(SCREEN_WIDTH * 0.04, 16),
-                  marginTop: SCREEN_HEIGHT * 0.01
+                  fontSize: fontSize.base,
+                  paddingHorizontal: spacing.md
                 }}
               >
-                Connecting Farmers and Buyers seamlessly
+                Your trusted farmer marketplace connecting growers with buyers
               </Text>
             </View>
 
-            {/* Tagline */}
-            <View 
-              className="bg-green-50 rounded-2xl border border-green-100"
-              style={{ 
-                padding: SCREEN_HEIGHT * 0.02,
-                marginBottom: SCREEN_HEIGHT * 0.03
-              }}
-            >
-              <Text 
-                className="text-green-800 text-center font-medium"
-                style={{ fontSize: Math.min(SCREEN_WIDTH * 0.038, 15) }}
-              >
-                Choose your role to get started
-              </Text>
-            </View>
-
-            {/* Role Selection Cards */}
-            <View style={{ gap: SCREEN_HEIGHT * 0.02 }}>
-              {/* Farmer Card */}
+            {/* Two large rounded buttons */}
+            <View style={{ gap: spacing.md, marginBottom: spacing.lg }}>
+              {/* Continue as Farmer - Solid Green */}
               <TouchableOpacity
                 onPress={goAsFarmer}
-                activeOpacity={0.7}
-                className="bg-white rounded-3xl overflow-hidden border border-gray-200"
+                activeOpacity={0.8}
+                className="bg-agri-primary rounded-3xl"
                 style={{
-                  shadowColor: '#000',
-                  shadowOffset: { width: 0, height: 2 },
-                  shadowOpacity: 0.1,
+                  paddingVertical: spacing.md,
+                  shadowColor: '#1E7D3A',
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.2,
                   shadowRadius: 8,
-                  elevation: 3,
+                  elevation: 4,
                 }}
               >
-                <LinearGradient
-                  colors={["#10B981", "#059669"]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={{ padding: SCREEN_WIDTH * 0.05 }}
-                >
-                  <View className="flex-row items-center">
-                    <View style={{ flex: 1 }}>
-                      <View className="flex-row items-center" style={{ marginBottom: 8 }}>
-                        <MaterialCommunityIcons
-                          name="sprout"
-                          size={Math.min(SCREEN_WIDTH * 0.07, 28)}
-                          color="white"
-                        />
-                        <Text 
-                          className="text-white font-bold"
-                          style={{ 
-                            fontSize: Math.min(SCREEN_WIDTH * 0.055, 24),
-                            marginLeft: 12
-                          }}
-                        >
-                          I'm a Farmer
-                        </Text>
-                      </View>
-                      <Text 
-                        className="text-green-50"
-                        style={{ 
-                          fontSize: Math.min(SCREEN_WIDTH * 0.035, 14),
-                          marginBottom: SCREEN_HEIGHT * 0.02
-                        }}
-                      >
-                        List your crops and connect with buyers
-                      </Text>
-                      <View className="flex-row items-center">
-                        <Text 
-                          className="text-white font-semibold"
-                          style={{ fontSize: Math.min(SCREEN_WIDTH * 0.04, 16) }}
-                        >
-                          Get Started
-                        </Text>
-                        <MaterialCommunityIcons
-                          name="arrow-right"
-                          size={Math.min(SCREEN_WIDTH * 0.05, 20)}
-                          color="white"
-                          style={{ marginLeft: 8 }}
-                        />
-                      </View>
-                    </View>
-                    <View style={{ marginLeft: 16 }}>
-                      <Image
-                        source={require("../assets/images/farmer.png")}
-                        style={{ 
-                          width: Math.min(SCREEN_WIDTH * 0.2, 96),
-                          height: Math.min(SCREEN_WIDTH * 0.2, 96)
-                        }}
-                        resizeMode="contain"
-                      />
-                    </View>
-                  </View>
-                </LinearGradient>
+                <View className="flex-row items-center justify-center">
+                  <MaterialCommunityIcons
+                    name="tractor"
+                    size={iconSize.lg}
+                    color="white"
+                  />
+                  <Text 
+                    className="text-white font-bold"
+                    style={{ 
+                      fontSize: fontSize.lg,
+                      marginLeft: spacing.sm
+                    }}
+                  >
+                    Continue as Farmer
+                  </Text>
+                </View>
               </TouchableOpacity>
 
-              {/* Buyer Card */}
+              {/* Continue as Buyer - Outlined Green */}
               <TouchableOpacity
                 onPress={goAsBuyer}
-                activeOpacity={0.7}
-                className="bg-white rounded-3xl overflow-hidden border border-gray-200"
+                activeOpacity={0.8}
+                className="bg-white rounded-3xl border-2 border-agri-primary"
                 style={{
-                  shadowColor: '#000',
+                  paddingVertical: spacing.md,
+                  shadowColor: '#1E7D3A',
                   shadowOffset: { width: 0, height: 2 },
                   shadowOpacity: 0.1,
-                  shadowRadius: 8,
-                  elevation: 3,
+                  shadowRadius: 6,
+                  elevation: 2,
                 }}
               >
-                <LinearGradient
-                  colors={["#3B82F6", "#2563EB"]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={{ padding: SCREEN_WIDTH * 0.05 }}
-                >
-                  <View className="flex-row items-center">
-                    <View style={{ flex: 1 }}>
-                      <View className="flex-row items-center" style={{ marginBottom: 8 }}>
-                        <MaterialCommunityIcons
-                          name="cart"
-                          size={Math.min(SCREEN_WIDTH * 0.07, 28)}
-                          color="white"
-                        />
-                        <Text 
-                          className="text-white font-bold"
-                          style={{ 
-                            fontSize: Math.min(SCREEN_WIDTH * 0.055, 24),
-                            marginLeft: 12
-                          }}
-                        >
-                          I'm a Buyer
-                        </Text>
-                      </View>
-                      <Text 
-                        className="text-blue-50"
-                        style={{ 
-                          fontSize: Math.min(SCREEN_WIDTH * 0.035, 14),
-                          marginBottom: SCREEN_HEIGHT * 0.02
-                        }}
-                      >
-                        Browse and purchase quality crops
-                      </Text>
-                      <View className="flex-row items-center">
-                        <Text 
-                          className="text-white font-semibold"
-                          style={{ fontSize: Math.min(SCREEN_WIDTH * 0.04, 16) }}
-                        >
-                          Get Started
-                        </Text>
-                        <MaterialCommunityIcons
-                          name="arrow-right"
-                          size={Math.min(SCREEN_WIDTH * 0.05, 20)}
-                          color="white"
-                          style={{ marginLeft: 8 }}
-                        />
-                      </View>
-                    </View>
-                    <View style={{ marginLeft: 16 }}>
-                      <Image
-                        source={require("../assets/images/Buyer.png")}
-                        style={{ 
-                          width: Math.min(SCREEN_WIDTH * 0.2, 96),
-                          height: Math.min(SCREEN_WIDTH * 0.2, 96)
-                        }}
-                        resizeMode="contain"
-                      />
-                    </View>
-                  </View>
-                </LinearGradient>
+                <View className="flex-row items-center justify-center">
+                  <MaterialCommunityIcons
+                    name="cart-outline"
+                    size={iconSize.lg}
+                    color="#1E7D3A"
+                  />
+                  <Text 
+                    className="text-agri-primary font-bold"
+                    style={{ 
+                      fontSize: fontSize.lg,
+                      marginLeft: spacing.sm
+                    }}
+                  >
+                    Continue as Buyer
+                  </Text>
+                </View>
               </TouchableOpacity>
             </View>
 
-            {/* Feature Pills */}
+            {/* Benefits card section with icons */}
             <View 
-              className="flex-row flex-wrap justify-center"
-              style={{ 
-                gap: SCREEN_WIDTH * 0.02,
-                marginTop: SCREEN_HEIGHT * 0.03
+              className="bg-white rounded-3xl"
+              style={{
+                padding: spacing.lg,
+                marginBottom: spacing.md,
+                shadowColor: '#1E7D3A',
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.1,
+                shadowRadius: 8,
+                elevation: 3,
               }}
             >
-              <View 
-                className="bg-white rounded-full border border-gray-200"
+              <Text 
+                className="text-agri-text font-bold text-center"
                 style={{ 
-                  paddingHorizontal: SCREEN_WIDTH * 0.04,
-                  paddingVertical: SCREEN_HEIGHT * 0.01
+                  fontSize: fontSize.lg,
+                  marginBottom: spacing.md
                 }}
               >
-                <Text 
-                  className="text-gray-700 font-medium"
-                  style={{ fontSize: Math.min(SCREEN_WIDTH * 0.03, 12) }}
-                >
-                  ✓ Secure Transactions
-                </Text>
-              </View>
-              <View 
-                className="bg-white rounded-full border border-gray-200"
-                style={{ 
-                  paddingHorizontal: SCREEN_WIDTH * 0.04,
-                  paddingVertical: SCREEN_HEIGHT * 0.01
-                }}
-              >
-                <Text 
-                  className="text-gray-700 font-medium"
-                  style={{ fontSize: Math.min(SCREEN_WIDTH * 0.03, 12) }}
-                >
-                  ✓ Real-time Updates
-                </Text>
-              </View>
-              <View 
-                className="bg-white rounded-full border border-gray-200"
-                style={{ 
-                  paddingHorizontal: SCREEN_WIDTH * 0.04,
-                  paddingVertical: SCREEN_HEIGHT * 0.01
-                }}
-              >
-                <Text 
-                  className="text-gray-700 font-medium"
-                  style={{ fontSize: Math.min(SCREEN_WIDTH * 0.03, 12) }}
-                >
-                  ✓ Direct Connect
-                </Text>
+                Why Choose MandiConnect?
+              </Text>
+              <View style={{ gap: spacing.sm }}>
+                <View className="flex-row items-center">
+                  <View 
+                    className="rounded-full bg-agri-light items-center justify-center"
+                    style={{ height: iconSize.xl, width: iconSize.xl }}
+                  >
+                    <MaterialCommunityIcons name="shield-check" size={iconSize.md} color="#1E7D3A" />
+                  </View>
+                  <Text 
+                    className="text-gray-700 flex-1"
+                    style={{ 
+                      fontSize: fontSize.sm,
+                      marginLeft: spacing.sm
+                    }}
+                  >
+                    Secure and verified transactions
+                  </Text>
+                </View>
+                <View className="flex-row items-center">
+                  <View 
+                    className="rounded-full bg-agri-light items-center justify-center"
+                    style={{ height: iconSize.xl, width: iconSize.xl }}
+                  >
+                    <MaterialCommunityIcons name="clock-fast" size={iconSize.md} color="#1E7D3A" />
+                  </View>
+                  <Text 
+                    className="text-gray-700 flex-1"
+                    style={{ 
+                      fontSize: fontSize.sm,
+                      marginLeft: spacing.sm
+                    }}
+                  >
+                    Real-time market updates
+                  </Text>
+                </View>
+                <View className="flex-row items-center">
+                  <View 
+                    className="rounded-full bg-agri-light items-center justify-center"
+                    style={{ height: iconSize.xl, width: iconSize.xl }}
+                  >
+                    <MaterialCommunityIcons name="handshake" size={iconSize.md} color="#1E7D3A" />
+                  </View>
+                  <Text 
+                    className="text-gray-700 flex-1"
+                    style={{ 
+                      fontSize: fontSize.sm,
+                      marginLeft: spacing.sm
+                    }}
+                  >
+                    Direct farmer-buyer connection
+                  </Text>
+                </View>
+                <View className="flex-row items-center">
+                  <View 
+                    className="rounded-full bg-agri-light items-center justify-center"
+                    style={{ height: iconSize.xl, width: iconSize.xl }}
+                  >
+                    <MaterialCommunityIcons name="chart-line" size={iconSize.md} color="#1E7D3A" />
+                  </View>
+                  <Text 
+                    className="text-gray-700 flex-1"
+                    style={{ 
+                      fontSize: fontSize.sm,
+                      marginLeft: spacing.sm
+                    }}
+                  >
+                    Fair and transparent pricing
+                  </Text>
+                </View>
               </View>
             </View>
+
+            {/* Security footer text */}
+            <Text 
+              className="text-gray-500 text-center"
+              style={{ fontSize: fontSize.xs }}
+            >
+              🔒 Your data is protected with end-to-end encryption
+            </Text>
           </View>
         </ScrollView>
       </SafeAreaView>
